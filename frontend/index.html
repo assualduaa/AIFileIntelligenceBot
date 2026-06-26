@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🧠 AI File Intelligence Bot</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.7/axios.min.js"></script>
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d2e;
+      --surface2:  #252840;
+      --border:    #2e3250;
+      --accent:    #6c63ff;
+      --accent2:   #00d2ff;
+      --success:   #00c48c;
+      --warning:   #ffa940;
+      --error:     #ff4d6d;
+      --text:      #e8eaf0;
+      --text2:     #8b90a8;
+      --radius:    12px;
+      --font:      'Segoe UI', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* ── Layout ── */
+    .app { display: flex; height: 100vh; }
+    .sidebar {
+      width: 300px; min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 0;
+    }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Sidebar header ── */
+    .sidebar-header {
+      padding: 20px 18px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h1 {
+      font-size: 16px; font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 2px;
+    }
+    .sidebar-header p { font-size: 11px; color: var(--text2); }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      margin: 14px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 18px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      background: var(--surface2);
+    }
+    .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(108,99,255,.08); }
+    .upload-zone .upload-icon { font-size: 28px; margin-bottom: 6px; }
+    .upload-zone p { font-size: 12px; color: var(--text2); }
+    .upload-zone .supported { font-size: 10px; color: var(--text2); margin-top: 4px; opacity: .7; }
+    .upload-btn {
+      margin-top: 10px;
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff; border: none; border-radius: 8px;
+      padding: 8px 18px; font-size: 12px; font-weight: 600;
+      cursor: pointer; width: 100%; transition: opacity .2s;
+    }
+    .upload-btn:hover { opacity: .88; }
+    .upload-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Progress bar ── */
+    .progress-bar {
+      height: 3px; background: var(--border); border-radius: 99px;
+      margin: 8px 14px 0; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 99px;
+      transition: width .3s;
+    }
+
+    /* ── Document list ── */
+    .docs-section {
+      flex: 1; overflow-y: auto; padding: 0 14px 14px;
+    }
+    .docs-title {
+      font-size: 10px; font-weight: 700; color: var(--text2);
+      text-transform: uppercase; letter-spacing: 1px;
+      padding: 14px 0 8px;
+    }
+    .doc-item {
+      background: var(--surface2); border-radius: 8px;
+      padding: 10px 12px; margin-bottom: 6px;
+      display: flex; justify-content: space-between; align-items: center;
+      border: 1px solid var(--border); cursor: pointer;
+      transition: border-color .2s;
+    }
+    .doc-item:hover { border-color: var(--accent); }
+    .doc-item.selected { border-color: var(--accent); background: rgba(108,99,255,.12); }
+    .doc-info { flex: 1; min-width: 0; }
+    .doc-name {
+      font-size: 11px; font-weight: 600; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .doc-meta { font-size: 10px; color: var(--text2); margin-top: 2px; }
+    .doc-badge {
+      font-size: 9px; padding: 2px 6px; border-radius: 4px;
+      font-weight: 600; margin-left: 6px; flex-shrink: 0;
+    }
+    .badge-pdf   { background: rgba(255,77,109,.15); color: var(--error); }
+    .badge-docx  { background: rgba(0,210,255,.12);  color: var(--accent2); }
+    .badge-txt   { background: rgba(0,196,140,.12);  color: var(--success); }
+    .badge-image { background: rgba(255,169,64,.12); color: var(--warning); }
+    .badge-video { background: rgba(108,99,255,.15); color: var(--accent); }
+
+    .doc-del {
+      background: none; border: none; color: var(--text2);
+      cursor: pointer; padding: 2px 4px; font-size: 13px;
+      transition: color .2s; flex-shrink: 0;
+    }
+    .doc-del:hover { color: var(--error); }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 12px;
+    }
+    .stat { text-align: center; flex: 1; }
+    .stat-val { font-size: 16px; font-weight: 700; color: var(--accent2); }
+    .stat-lbl { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── Chat area ── */
+    .chat-header {
+      padding: 16px 20px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .chat-header h2 { font-size: 15px; font-weight: 700; flex: 1; }
+    .chat-header .model-badge {
+      font-size: 10px; padding: 3px 8px;
+      background: var(--surface2); border-radius: 6px;
+      color: var(--text2); border: 1px solid var(--border);
+    }
+    .filter-chip {
+      font-size: 10px; padding: 3px 10px;
+      background: rgba(108,99,255,.15); border-radius: 6px;
+      color: var(--accent); border: 1px solid rgba(108,99,255,.3);
+      cursor: pointer;
+    }
+    .filter-chip:hover { background: rgba(108,99,255,.25); }
+
+    .messages {
+      flex: 1; overflow-y: auto;
+      padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .msg { display: flex; gap: 10px; max-width: 86%; }
+    .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+    .msg.assistant { align-self: flex-start; }
+    .avatar {
+      width: 32px; height: 32px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .msg.user .avatar     { background: linear-gradient(135deg, var(--accent), #8b5cf6); }
+    .msg.assistant .avatar { background: linear-gradient(135deg, var(--surface2), var(--border)); }
+    .bubble {
+      border-radius: var(--radius); padding: 11px 14px;
+      font-size: 13.5px; line-height: 1.6;
+    }
+    .msg.user .bubble {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff; border-bottom-right-radius: 4px;
+    }
+    .msg.assistant .bubble {
+      background: var(--surface2); color: var(--text);
+      border: 1px solid var(--border); border-bottom-left-radius: 4px;
+    }
+    .msg.assistant .bubble pre {
+      background: rgba(0,0,0,.3); padding: 8px; border-radius: 6px;
+      font-size: 12px; overflow-x: auto; margin-top: 8px;
+      white-space: pre-wrap;
+    }
+    .chunk-refs {
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .chunk-refs-title { font-size: 10px; color: var(--text2); margin-bottom: 4px; }
+    .chunk-ref {
+      font-size: 10px; background: rgba(0,210,255,.06);
+      border: 1px solid rgba(0,210,255,.12);
+      border-radius: 6px; padding: 4px 8px;
+      margin-bottom: 3px; color: var(--text2);
+    }
+    .chunk-ref strong { color: var(--accent2); }
+
+    /* ── Typing indicator ── */
+    .typing { display: flex; align-items: center; gap: 4px; padding: 4px 0; }
+    .typing span {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--text2); animation: bounce .8s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .15s; }
+    .typing span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce {
+      0%,80%,100% { transform: translateY(0); }
+      40%          { transform: translateY(-6px); }
+    }
+
+    /* ── Input bar ── */
+    .input-bar {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex; gap: 10px; align-items: flex-end;
+    }
+    .input-wrap { flex: 1; position: relative; }
+    textarea {
+      width: 100%; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-family: var(--font);
+      font-size: 13.5px; padding: 11px 14px;
+      resize: none; outline: none;
+      transition: border-color .2s; min-height: 44px; max-height: 140px;
+      line-height: 1.5;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--text2); }
+    .send-btn {
+      background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      border: none; border-radius: 10px; color: #fff;
+      width: 44px; height: 44px; font-size: 18px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: opacity .2s; flex-shrink: 0;
+    }
+    .send-btn:hover  { opacity: .88; }
+    .send-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ── Welcome / empty state ── */
+    .welcome {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 30px;
+    }
+    .welcome-inner { max-width: 380px; }
+    .welcome h2 { font-size: 22px; margin-bottom: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .welcome p { color: var(--text2); font-size: 13.5px; line-height: 1.65; margin-bottom: 20px; }
+    .pill-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .pill {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 6px 14px; font-size: 12px;
+      color: var(--text2); cursor: pointer; transition: all .2s;
+    }
+    .pill:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      padding: 10px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      color: #fff; z-index: 999; animation: slideIn .3s ease;
+    }
+    .toast.success { background: var(--success); }
+    .toast.error   { background: var(--error); }
+    .toast.info    { background: var(--accent); }
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+const API = "http://localhost:8000";
+
+// ── Utilities ──────────────────────────────────────────────────────────
+function genId() { return Math.random().toString(36).slice(2, 10); }
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1048576) return `${(bytes/1024).toFixed(1)}KB`;
+  return `${(bytes/1048576).toFixed(1)}MB`;
+}
+
+function typeBadge(ft) {
+  const map = { pdf:'badge-pdf', docx:'badge-docx', txt:'badge-txt', image:'badge-image', video:'badge-video' };
+  return `doc-badge ${map[ft] || 'badge-txt'}`;
+}
+
+// ── Toast component ────────────────────────────────────────────────────
+function Toast({ msg, type, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3200);
+    return () => clearTimeout(t);
+  }, []);
+  return <div className={`toast ${type}`}>{msg}</div>;
+}
+
+// ── Typing indicator ───────────────────────────────────────────────────
+function TypingIndicator() {
+  return (
+    <div className="msg assistant">
+      <div className="avatar">🤖</div>
+      <div className="bubble">
+        <div className="typing">
+          <span/><span/><span/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Message bubble ─────────────────────────────────────────────────────
+function Message({ msg }) {
+  const isUser = msg.role === "user";
+  const renderText = (text) => {
+    // Handle markdown-like **bold** and code blocks
+    return text
+      .split(/\n/)
+      .map((line, i) => {
+        const parts = line.split(/(\*\*[^*]+\*\*)/g).map((p, j) => {
+          if (p.startsWith("**") && p.endsWith("**")) {
+            return <strong key={j}>{p.slice(2,-2)}</strong>;
+          }
+          return p;
+        });
+        return <React.Fragment key={i}>{parts}<br/></React.Fragment>;
+      });
+  };
+
+  return (
+    <div className={`msg ${msg.role}`}>
+      <div className="avatar">{isUser ? "👤" : "🤖"}</div>
+      <div className="bubble">
+        {renderText(msg.content)}
+        {!isUser && msg.chunks && msg.chunks.length > 0 && (
+          <details style={{marginTop:8}}>
+            <summary style={{fontSize:10,color:'var(--text2)',cursor:'pointer',userSelect:'none',listStyle:'none',display:'flex',alignItems:'center',gap:4}}>
+              <span style={{opacity:.5}}>▶</span>
+              <span style={{opacity:.55}}>Sources ({msg.chunks.length} chunks)</span>
+            </summary>
+            <div className="chunk-refs" style={{marginTop:6}}>
+              {msg.chunks.slice(0,3).map((c, i) => (
+                <div className="chunk-ref" key={i}>
+                  <strong>{c.source}</strong>
+                  <div style={{marginTop:2, fontSize:9, opacity:.7, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
+                    {c.text.slice(0,90)}…
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ───────────────────────────────────────────────────────────
+function App() {
+  const [messages,    setMessages]    = useState([]);
+  const [input,       setInput]       = useState("");
+  const [loading,     setLoading]     = useState(false);
+  const [uploading,   setUploading]   = useState(false);
+  const [uploadPct,   setUploadPct]   = useState(0);
+  const [documents,   setDocuments]   = useState([]);
+  const [stats,       setStats]       = useState({ total_chunks: 0, total_documents: 0 });
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [toast,       setToast]       = useState(null);
+  const [sessionId]                   = useState(() => genId());
+  const [isDrag,      setIsDrag]      = useState(false);
+
+  const fileRef    = useRef();
+  const bottomRef  = useRef();
+  const textaRef   = useRef();
+
+  // ── Fetch docs & stats on mount ──────────────────────────────────────
+  useEffect(() => {
+    fetchDocs();
+    fetchStats();
+  }, []);
+
+  // ── Auto-scroll ──────────────────────────────────────────────────────
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const showToast = (msg, type="info") => {
+    setToast({ msg, type });
+  };
+
+  const fetchDocs = async () => {
+    try {
+      const r = await axios.get(`${API}/documents`);
+      setDocuments(r.data.documents || []);
+    } catch { /* server may not be up yet */ }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const r = await axios.get(`${API}/stats`);
+      setStats(r.data);
+    } catch {}
+  };
+
+  // ── File upload handler ───────────────────────────────────────────────
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadPct(10);
+
+    const fd = new FormData();
+    fd.append("file", file);
+
+    try {
+      setUploadPct(40);
+      const r = await axios.post(`${API}/upload`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (e) => {
+          const pct = Math.round((e.loaded / e.total) * 50);
+          setUploadPct(50 + pct);
+        },
+      });
+      setUploadPct(100);
+      showToast(`✅ ${r.data.filename} — ${r.data.chunks} chunks indexed`, "success");
+      await fetchDocs();
+      await fetchStats();
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Upload failed";
+      showToast(`❌ ${msg}`, "error");
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadPct(0), 600);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  // ── Query handler ─────────────────────────────────────────────────────
+  const handleQuery = async () => {
+    const q = input.trim();
+    if (!q || loading) return;
+
+    const userMsg = { role: "user", content: q, id: genId() };
+    setMessages(m => [...m, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const r = await axios.post(`${API}/query`, {
+        query:      q,
+        session_id: sessionId,
+        user_id:    "user_01",
+        source:     selectedDoc || undefined,
+        top_k:      5,
+      });
+
+      const aiMsg = {
+        role:    "assistant",
+        content: r.data.answer,
+        chunks:  r.data.chunks,
+        model:   r.data.model,
+        mode:    r.data.mode,
+        id:      genId(),
+      };
+      setMessages(m => [...m, aiMsg]);
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Query failed — is the backend running?";
+      setMessages(m => [...m, { role:"assistant", content:`⚠️ ${msg}`, id: genId() }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleQuery(); }
+  };
+
+  // ── Delete doc ────────────────────────────────────────────────────────
+  const deleteDoc = async (e, name) => {
+    e.stopPropagation();
+    try {
+      await axios.delete(`${API}/documents/${encodeURIComponent(name)}`);
+      showToast(`🗑️ ${name} removed`, "info");
+      if (selectedDoc === name) setSelectedDoc(null);
+      await fetchDocs();
+      await fetchStats();
+    } catch { showToast("Delete failed", "error"); }
+  };
+
+  // ── Drag & drop ───────────────────────────────────────────────────────
+  const onDrop = (e) => {
+    e.preventDefault(); setIsDrag(false);
+    const f = e.dataTransfer.files[0];
+    if (f) handleUpload(f);
+  };
+
+  // ── Suggested queries ─────────────────────────────────────────────────
+  const suggestions = [
+    "What is this document about?",
+    "Summarize the key skills mentioned",
+    "List all experience and roles",
+    "What are the qualifications?",
+  ];
+
+  return (
+    <div className="app">
+      {/* ── Sidebar ── */}
+      <div className="sidebar">
+        <div className="sidebar-header">
+          <h1>🧠 AI File Intelligence</h1>
+          <p>RAG-powered document chatbot</p>
+        </div>
+
+        {/* Upload zone */}
+        <div
+          className={`upload-zone ${isDrag ? "drag" : ""}`}
+          onDragOver={e => { e.preventDefault(); setIsDrag(true); }}
+          onDragLeave={() => setIsDrag(false)}
+          onDrop={onDrop}
+          onClick={() => !uploading && fileRef.current?.click()}
+        >
+          <div className="upload-icon">📂</div>
+          <p><strong>Drop file here</strong> or click</p>
+          <p className="supported">PDF · DOCX · TXT · PNG/JPG · MP4</p>
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            accept=".pdf,.docx,.doc,.txt,.png,.jpg,.jpeg,.tiff,.mp4,.mp3,.wav"
+            onChange={e => handleUpload(e.target.files[0])}
+          />
+        </div>
+
+        {uploadPct > 0 && (
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${uploadPct}%` }} />
+          </div>
+        )}
+
+        {/* Document list */}
+        <div className="docs-section">
+          <div className="docs-title">Indexed Documents</div>
+          {documents.length === 0 ? (
+            <div style={{ fontSize: 11, color: "var(--text2)", textAlign: "center", padding: "20px 0" }}>
+              No documents yet.<br />Upload a file to begin.
+            </div>
+          ) : (
+            documents.map(doc => (
+              <div
+                key={doc.source}
+                className={`doc-item ${selectedDoc === doc.source ? "selected" : ""}`}
+                onClick={() => setSelectedDoc(s => s === doc.source ? null : doc.source)}
+              >
+                <div className="doc-info">
+                  <div className="doc-name">{doc.source}</div>
+                  <div className="doc-meta">
+                    {doc.chunk_count} chunks · {doc.language?.toUpperCase()} · {doc.file_type}
+                  </div>
+                </div>
+                <span className={typeBadge(doc.file_type)}>{doc.file_type}</span>
+                <button className="doc-del" onClick={e => deleteDoc(e, doc.source)} title="Remove">✕</button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="stats-bar">
+          <div className="stat">
+            <div className="stat-val">{stats.total_documents}</div>
+            <div className="stat-lbl">Docs</div>
+          </div>
+          <div className="stat">
+            <div className="stat-val">{stats.total_chunks}</div>
+            <div className="stat-lbl">Chunks</div>
+          </div>
+          <div className="stat" style={{ cursor: "pointer" }} onClick={() => { fetchDocs(); fetchStats(); }}>
+            <div className="stat-val" style={{ fontSize: 18 }}>↻</div>
+            <div className="stat-lbl">Refresh</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main chat ── */}
+      <div className="main">
+        <div className="chat-header">
+          <h2>Chat with your documents</h2>
+          {selectedDoc && (
+            <div className="filter-chip" onClick={() => setSelectedDoc(null)}>
+              📎 {selectedDoc} ✕
+            </div>
+          )}
+          <div className="model-badge">
+            {stats.total_chunks > 0 ? `${stats.total_chunks} vectors` : "No index"}
+          </div>
+        </div>
+
+        {/* Messages */}
+        {messages.length === 0 ? (
+          <div className="welcome">
+            <div className="welcome-inner">
+              <h2>Ask anything about your files</h2>
+              <p>
+                Upload documents on the left, then ask questions here.
+                The AI retrieves relevant chunks from your files and generates
+                grounded, fact-based answers — no hallucinations.
+              </p>
+              {documents.length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
+                    Try asking:
+                  </div>
+                  <div className="pill-row">
+                    {suggestions.map(s => (
+                      <div key={s} className="pill" onClick={() => { setInput(s); textaRef.current?.focus(); }}>
+                        {s}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="messages">
+            {messages.map(msg => <Message key={msg.id} msg={msg} />)}
+            {loading && <TypingIndicator />}
+            <div ref={bottomRef} />
+          </div>
+        )}
+
+        {/* Input bar */}
+        <div className="input-bar">
+          <div className="input-wrap">
+            <textarea
+              ref={textaRef}
+              rows={1}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                documents.length === 0
+                  ? "Upload a document first…"
+                  : selectedDoc
+                  ? `Ask about ${selectedDoc}…`
+                  : "Ask a question about your documents…"
+              }
+            />
+          </div>
+          <button
+            className="send-btn"
+            onClick={handleQuery}
+            disabled={loading || !input.trim() || documents.length === 0}
+          >
+            ➤
+          </button>
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
