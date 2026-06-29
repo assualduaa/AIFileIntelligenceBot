@@ -1,8 +1,21 @@
 """
-api.py — FastAPI application: routes, middleware, lifecycle
+api.py - FastAPI application: routes, middleware, lifecycle
+v2: Mistral + LangChain + FAISS
+
+Endpoints:
+  POST /upload          - ingest file -> FAISS index
+  POST /query           - RAG query (legacy name)
+  POST /chat            - RAG query (new canonical name)
+  POST /summary         - document summarization
+  POST /recommendations - suggested questions
+  GET  /documents       - list indexed documents
+  DELETE /documents/{f} - remove document
+  GET  /stats           - vector store stats
+  GET  /health          - health check
+  DELETE /session/{id}  - clear session memory
+  POST /memory          - update user memory
 """
 import os
-import uuid
 import logging
 import tempfile
 from pathlib import Path
@@ -15,47 +28,37 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from config import CORS_ORIGINS, BASE_DIR
-from embeddings import load_tfidf_if_available, fit_tfidf_on_corpus
 from ingestion import ingest_file, save_upload
 from retrieval import retrieve_context, list_documents, delete_document, get_store_stats
 from memory import memory_manager, append_session_memory, clear_session_memory
-from llm import generate_response
+from llm import generate_response, generate_summary, generate_recommendations
 
-# ── Logging ────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
 
-# ── App ────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="AI File Intelligence Bot",
-    description="RAG-powered document intelligence system",
-    version="1.0.0",
+    description="RAG-powered document intelligence - Mistral + LangChain + FAISS",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
+
 @app.on_event("startup")
 def on_startup():
-    """Always refit TF-IDF on stored corpus so relevance scores work correctly."""
     try:
-        from retrieval import get_collection
-        col = get_collection()
-        if col.count() > 0:
-            docs  = col.get(include=["documents"])
-            texts = docs.get("documents", [])
-            if texts:
-                fit_tfidf_on_corpus(texts)
-                logger.info(f"Startup: TF-IDF fitted on {len(texts)} stored chunks.")
-            else:
-                load_tfidf_if_available()
-        else:
-            load_tfidf_if_available()
-            logger.info("Startup: no stored chunks yet.")
+        from langchain_pipeline import get_vector_store, get_embeddings
+        get_embeddings()
+        store = get_vector_store()
+        total = store.index.ntotal if store else 0
+        logger.info(f"Startup: FAISS index loaded ({total} vectors).")
     except Exception as e:
-        logger.warning(f"Startup TF-IDF fit failed: {e}")
+        logger.warning(f"Startup pre-warm skipped: {e}")
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -65,7 +68,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Serve React frontend ───────────────────────────────────────────────
 FRONTEND_DIR = BASE_DIR / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
@@ -75,13 +77,26 @@ if FRONTEND_DIR.exists():
         return FileResponse(str(FRONTEND_DIR / "index.html"))
 
 
-# ── Request/Response Models ────────────────────────────────────────────
+# ======================================================================
+# REQUEST / RESPONSE MODELS
+# ======================================================================
+
 class QueryRequest(BaseModel):
     query:      str
-    user_id:    str  = "default_user"
-    session_id: str  = "default_session"
-    source:     Optional[str] = None  # filter by specific doc
-    top_k:      int  = 5
+    user_id:    str           = "default_user"
+    session_id: str           = "default_session"
+    source:     Optional[str] = None
+    top_k:      int           = 5
+
+
+class SummaryRequest(BaseModel):
+    source: Optional[str] = None
+    top_k:  int           = 20
+
+
+class RecommendationsRequest(BaseModel):
+    source: Optional[str] = None
+    top_k:  int           = 10
 
 
 class MemoryUpdateRequest(BaseModel):
@@ -90,38 +105,33 @@ class MemoryUpdateRequest(BaseModel):
     value:   str
 
 
-# ── Health ─────────────────────────────────────────────────────────────
+# ======================================================================
+# HEALTH
+# ======================================================================
+
 @app.get("/health")
 def health():
     stats = get_store_stats()
-    return {
-        "status":  "ok",
-        "version": "1.0.0",
-        **stats,
-    }
+    return {"status": "ok", "version": "2.0.0", "llm": "mistral",
+            "vector_store": "faiss", **stats}
 
 
-# ── File Upload ────────────────────────────────────────────────────────
+# ======================================================================
+# FILE UPLOAD
+# ======================================================================
+
 @app.post("/upload")
-async def upload_file(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-):
-    """
-    Upload a file → triggers full ingestion pipeline in background.
-    Supported: PDF, DOCX, TXT, PNG/JPG (OCR), MP4/WAV (Whisper)
-    """
+async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    """Upload a document -> ingest -> embed -> FAISS index."""
     filename = file.filename or "unknown_file"
     logger.info(f"Upload received: {filename} ({file.content_type})")
 
-    # Save to temp
     suffix = Path(filename).suffix
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
+        content  = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
 
-    # Run ingestion synchronously (for demo reliability)
     try:
         saved_path = save_upload(tmp_path, filename)
         result     = ingest_file(saved_path, filename)
@@ -137,34 +147,17 @@ async def upload_file(
     if result["status"] != "success":
         raise HTTPException(status_code=422, detail=result.get("message", "Ingestion failed"))
 
-    # Refit TF-IDF on updated corpus so queries use consistent embedding space
-    try:
-        from retrieval import get_collection
-        col = get_collection()
-        if col.count() > 0:
-            docs = col.get(include=["documents"])
-            fit_tfidf_on_corpus(docs.get("documents", []))
-    except Exception as e:
-        logger.warning(f"TF-IDF refit skipped: {e}")
-
     return JSONResponse(content=result)
 
 
-# ── Chat / Query ───────────────────────────────────────────────────────
-@app.post("/query")
-def query_documents(req: QueryRequest):
-    """
-    RAG query pipeline:
-    1. Retrieve top-k relevant chunks
-    2. Build memory context (session + user + semantic)
-    3. Construct grounded prompt
-    4. Generate LLM response
-    5. Update session memory
-    """
-    if not req.query.strip():
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
+# ======================================================================
+# RAG CHAT  (/query legacy + /chat new)
+# ======================================================================
 
-    # Build memory context
+def _run_rag_query(req: QueryRequest) -> dict:
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+
     context = memory_manager.build_context(
         user_id=req.user_id,
         session_id=req.session_id,
@@ -172,25 +165,17 @@ def query_documents(req: QueryRequest):
         top_k=req.top_k,
     )
 
-    # Check if any docs are indexed
     if not context["semantic"]:
-        return {
-            "answer":   "No documents indexed yet. Please upload a file first.",
-            "chunks":   [],
-            "mode":     "no_context",
-        }
+        return {"answer": "No documents indexed yet. Please upload a file first.",
+                "chunks": [], "mode": "no_context", "model": "none"}
 
-    # Build structured prompt
     prompt = memory_manager.build_prompt_context(context, req.query)
-
-    # Generate response
     result = generate_response(
         prompt_context=prompt,
         query=req.query,
         chat_history=context["session"],
     )
 
-    # Update session memory
     append_session_memory(req.session_id, "user",      req.query)
     append_session_memory(req.session_id, "assistant", result["answer"])
 
@@ -204,37 +189,130 @@ def query_documents(req: QueryRequest):
     }
 
 
-# ── Documents List ─────────────────────────────────────────────────────
+@app.post("/query")
+def query_documents(req: QueryRequest):
+    """RAG query (legacy endpoint - preserved for backward compat)."""
+    return _run_rag_query(req)
+
+
+@app.post("/chat")
+def chat(req: QueryRequest):
+    """
+    RAG chat endpoint (canonical v2 name).
+
+    Pipeline:
+      1. Embed query via HuggingFace sentence-transformers
+      2. FAISS similarity search -> top-k chunks
+      3. Build structured prompt with session + user memory context
+      4. Mistral LLM generates context-grounded answer
+      5. Update session history
+    """
+    return _run_rag_query(req)
+
+
+# ======================================================================
+# DOCUMENT SUMMARIZATION
+# ======================================================================
+
+@app.post("/summary")
+def summarize_document(req: SummaryRequest):
+    """
+    Generate a structured document summary using Mistral + LangChain.
+
+    If source is specified, summarizes only that document.
+    If omitted, uses all indexed content.
+
+    Response: {"summary": "...", "key_points": [...], "source": "...", "chunks_used": N}
+    """
+    if req.source:
+        from langchain_pipeline import fetch_all_chunks_for_source
+        chunks = fetch_all_chunks_for_source(req.source)
+        if not chunks:
+            raise HTTPException(status_code=404,
+                                detail=f"Document '{req.source}' not found in index.")
+    else:
+        chunks = retrieve_context("document overview summary main content", top_k=req.top_k)
+        if not chunks:
+            raise HTTPException(status_code=404, detail="No documents indexed yet.")
+
+    result = generate_summary(chunks[: req.top_k])
+    return {**result, "source": req.source or "all_documents",
+            "chunks_used": len(chunks[: req.top_k])}
+
+
+# ======================================================================
+# RECOMMENDED QUESTIONS
+# ======================================================================
+
+@app.post("/recommendations")
+def recommended_questions(req: RecommendationsRequest):
+    """
+    Generate 5-8 exploration questions from document content via Mistral + LangChain.
+
+    Response: {"recommended_questions": [...], "source": "...", "chunks_used": N}
+    """
+    if req.source:
+        from langchain_pipeline import fetch_all_chunks_for_source
+        chunks = fetch_all_chunks_for_source(req.source)
+        if not chunks:
+            raise HTTPException(status_code=404,
+                                detail=f"Document '{req.source}' not found in index.")
+    else:
+        chunks = retrieve_context("key topics discussed main content overview", top_k=req.top_k)
+        if not chunks:
+            raise HTTPException(status_code=404, detail="No documents indexed yet.")
+
+    result = generate_recommendations(chunks[: req.top_k])
+    return {**result, "source": req.source or "all_documents",
+            "chunks_used": len(chunks[: req.top_k])}
+
+
+# ======================================================================
+# DOCUMENT MANAGEMENT
+# ======================================================================
+
 @app.get("/documents")
 def get_documents():
-    """List all indexed documents with metadata."""
     return {"documents": list_documents()}
 
 
-# ── Delete Document ────────────────────────────────────────────────────
 @app.delete("/documents/{filename}")
 def remove_document(filename: str):
-    """Remove a document and all its chunks from the vector store."""
-    deleted = delete_document(filename)
+    try:
+        deleted = delete_document(filename)
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     if deleted == 0:
-        raise HTTPException(status_code=404, detail=f"Document '{filename}' not found")
+        raise HTTPException(status_code=404, detail=f"Document '{filename}' not found in index.")
+
+    # Also remove the physical file from uploads folder (best-effort)
+    uploads_dir = BASE_DIR / "uploads"
+    for candidate in uploads_dir.glob("**/*"):
+        if candidate.name == filename or candidate.stem == filename:
+            try:
+                candidate.unlink()
+                logger.info(f"Deleted upload file: {candidate}")
+            except Exception as e:
+                logger.warning(f"Could not delete upload file {candidate}: {e}")
+
     return {"deleted_chunks": deleted, "filename": filename}
 
 
-# ── Vector Store Stats ─────────────────────────────────────────────────
+# ======================================================================
+# STATS, SESSION, MEMORY
+# ======================================================================
+
 @app.get("/stats")
 def store_stats():
     return get_store_stats()
 
 
-# ── Session Reset ──────────────────────────────────────────────────────
 @app.delete("/session/{session_id}")
 def reset_session(session_id: str):
     clear_session_memory(session_id)
     return {"status": "cleared", "session_id": session_id}
 
 
-# ── User Memory Update ─────────────────────────────────────────────────
 @app.post("/memory")
 def update_memory(req: MemoryUpdateRequest):
     from memory import set_user_memory
