@@ -36,6 +36,11 @@ User Upload → File Parser → Text Chunking → Embedding Model → Vector DB 
 
 ---
 
+<img width="1532" height="790" alt="bot 1" src="https://github.com/user-attachments/assets/ce598951-1fc8-4c0c-af69-4c65f250f275" />
+
+<img width="1537" height="762" alt="bot 2" src="https://github.com/user-attachments/assets/b5a92430-6ffa-4a37-9c0a-d9542103cfff" />
+
+
 ## 🛠️ Tech Stack
 
 - Backend: Python (FastAPI / Flask)
