@@ -11,17 +11,29 @@ if not exist .env (
 )
 
 REM Install dependencies
+REM NOTE: uses "python -m pip" (not bare "pip") because on plain Windows
+REM Python installs, pip.exe often isn't on PATH even though python.exe is.
+REM --break-system-packages was dropped: it's a Linux/PEP-668 flag that some
+REM Windows pip versions don't recognize, which was silently aborting the
+REM whole install before any packages landed (that's what broke this before).
 echo 📦 Installing dependencies...
-pip install -r backend\requirements.txt --break-system-packages -q
+python -m pip install -r backend\requirements.txt -q
+if errorlevel 1 (
+    echo.
+    echo ❌ Dependency install failed — see errors above. Fix them and re-run this script.
+    pause
+    exit /b 1
+)
 
-REM Install Whisper (audio/video transcription support)
+REM Install Whisper (audio/video transcription support — optional, app runs fine without it)
 echo 🎙️ Installing openai-whisper for audio/video support (this may take a few minutes)...
-pip install openai-whisper --break-system-packages -q
+python -m pip install openai-whisper -q
 
-REM Start backend
+REM Start backend — kept in a window that stays open (cmd /k) so any crash
+REM/error is visible instead of the window vanishing before you can read it.
 echo 🚀 Starting FastAPI backend...
 cd backend
-start "" python main.py
+start "AI File Intelligence Bot - Backend" cmd /k python main.py
 cd ..
 
 timeout /t 5 /nobreak > nul

@@ -1,47 +1,49 @@
 """
 langchain_pipeline.py — LangChain Workflow Orchestration Engine
-v2: FAISS vector store + Mistral LLM + RAG / Summary / Recommendations chains
+v3: Per-user FAISS vector stores (multi-tenant isolation) + pluggable LLM
+    Service Layer (Ollama primary / Mistral / OpenAI) + RAG / Summary /
+    Recommendations chains.
 
 Architecture:
   Document text
-       ↓
+       |
   LangChain RecursiveCharacterTextSplitter
-       ↓
-  HuggingFace Embeddings (all-MiniLM-L6-v2)
-       ↓
-  FAISS Vector Store (persistent)
-       ↓
-  Similarity Search (Top-K)
-       ↓
-  Mistral API (ChatMistralAI)
-       ↓
+       |
+  HuggingFace Embeddings (all-MiniLM-L6-v2)  -- shared across users
+       |
+  FAISS Vector Store (persistent, one index per user_id)
+       |
+  Similarity Search (Top-K, scoped to the requesting user)
+       |
+  LLM Service Layer -> Ollama (local, default) / External API (future)
+       |
   Structured Response
+
+CR-01 Requirement 4 (document isolation): every FAISS index, its metadata
+file, and its on-disk directory are keyed by user_id. There is no shared
+global index anymore — a user's similarity search can only ever see vectors
+written under their own user_id directory.
 """
 import json
 import logging
 import re
-import shutil
-from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 from config import (
-    MISTRAL_API_KEY, MISTRAL_MODEL,
-    LLM_TEMPERATURE, LLM_MAX_TOKENS,
     EMBEDDING_MODEL,
-    FAISS_INDEX_DIR, FAISS_METADATA_PATH,
     CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL,
+    user_faiss_index_dir, user_faiss_metadata_path,
 )
 
 logger = logging.getLogger(__name__)
 
-# ── Singleton state ────────────────────────────────────────────────────
-_vector_store = None   # LangChain FAISS wrapper
-_embeddings   = None   # HuggingFace embeddings model
-_llm          = None   # Mistral LLM
+# ── Singleton / per-user cache state ───────────────────────────────────
+_vector_stores: Dict[int, Any] = {}   # user_id -> LangChain FAISS wrapper
+_embeddings = None                     # HuggingFace embeddings model (shared, stateless)
 
 
 # ══════════════════════════════════════════════════════════════════════
-# EMBEDDINGS
+# EMBEDDINGS  (shared across users — the model itself holds no document data)
 # ══════════════════════════════════════════════════════════════════════
 
 def get_embeddings():
@@ -72,91 +74,103 @@ def get_embeddings():
 
 
 # ══════════════════════════════════════════════════════════════════════
-# FAISS VECTOR STORE
+# FAISS VECTOR STORE (per-user)
 # ══════════════════════════════════════════════════════════════════════
 
-def get_vector_store():
-    """Return singleton FAISS vector store (loaded from disk if available)."""
-    global _vector_store
-    if _vector_store is None:
-        _vector_store = _load_faiss_from_disk()
-    return _vector_store
+def get_vector_store(user_id: int):
+    """Return this user's singleton FAISS vector store (loaded from disk if available)."""
+    if user_id not in _vector_stores:
+        _vector_stores[user_id] = _load_faiss_from_disk(user_id)
+    return _vector_stores[user_id]
 
 
-def _load_faiss_from_disk():
-    """Attempt to load persisted FAISS index. Returns None if not found."""
+def _load_faiss_from_disk(user_id: int):
+    """Attempt to load this user's persisted FAISS index. Returns None if not found."""
     from langchain_community.vectorstores import FAISS
 
-    index_file = FAISS_INDEX_DIR / "index.faiss"
+    index_dir = user_faiss_index_dir(user_id)
+    index_file = index_dir / "index.faiss"
     if not index_file.exists():
-        logger.info("No persisted FAISS index found — will create on first upload.")
+        logger.info(f"No persisted FAISS index for user_id={user_id} — will create on first upload.")
         return None
 
     try:
         store = FAISS.load_local(
-            str(FAISS_INDEX_DIR),
+            str(index_dir),
             get_embeddings(),
             allow_dangerous_deserialization=True,
         )
         total = store.index.ntotal
-        logger.info(f"FAISS index loaded ({total} vectors) from {FAISS_INDEX_DIR}")
+        logger.info(f"FAISS index loaded for user_id={user_id} ({total} vectors) from {index_dir}")
         return store
     except Exception as e:
-        logger.warning(f"Could not load FAISS index: {e}")
+        logger.warning(f"Could not load FAISS index for user_id={user_id}: {e}")
         return None
 
 
-def _persist_faiss():
-    """Save current FAISS index to disk."""
-    global _vector_store
-    if _vector_store is None:
+def _persist_faiss(user_id: int):
+    """Save this user's current FAISS index to disk."""
+    store = _vector_stores.get(user_id)
+    if store is None:
         return
     try:
-        FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
-        _vector_store.save_local(str(FAISS_INDEX_DIR))
-        logger.info(f"FAISS index saved ({_vector_store.index.ntotal} vectors).")
+        index_dir = user_faiss_index_dir(user_id)
+        store.save_local(str(index_dir))
+        logger.info(f"FAISS index saved for user_id={user_id} ({store.index.ntotal} vectors).")
     except Exception as e:
-        logger.error(f"FAISS save failed: {e}")
+        logger.error(f"FAISS save failed for user_id={user_id}: {e}")
 
 
-def add_documents_to_faiss(texts: List[str], metadatas: List[Dict]) -> int:
+def add_documents_to_faiss(
+    user_id: int,
+    texts: List[str],
+    metadatas: List[Dict],
+    precomputed_embeddings: Optional[List[List[float]]] = None,
+) -> int:
     """
-    Add chunked documents to FAISS store and persist.
-    Creates the store if it doesn't exist yet.
-    Returns the number of chunks indexed.
+    Add chunked documents to this user's FAISS store and persist.
+    If precomputed_embeddings are provided they are used directly (no re-embedding).
+    Creates the store if it doesn't exist yet. Returns the number of chunks indexed.
     """
-    global _vector_store
     from langchain_community.vectorstores import FAISS
     from langchain_core.documents import Document
 
     if not texts:
         return 0
 
-    docs = [Document(page_content=t, metadata=m) for t, m in zip(texts, metadatas)]
-    embeddings = get_embeddings()
+    emb_model = get_embeddings()
+    store = _vector_stores.get(user_id)
 
-    if _vector_store is None:
-        _vector_store = FAISS.from_documents(docs, embeddings)
-        logger.info(f"Created new FAISS index with {len(docs)} documents.")
+    if precomputed_embeddings and len(precomputed_embeddings) == len(texts):
+        text_emb_pairs = list(zip(texts, precomputed_embeddings))
+        if store is None:
+            store = FAISS.from_embeddings(text_emb_pairs, emb_model, metadatas=metadatas)
+            logger.info(f"Created new FAISS index for user_id={user_id} with {len(texts)} pre-embedded docs.")
+        else:
+            store.add_embeddings(text_emb_pairs, metadatas=metadatas)
+            logger.info(f"Added {len(texts)} pre-embedded docs to FAISS index for user_id={user_id}.")
     else:
-        _vector_store.add_documents(docs)
-        logger.info(f"Added {len(docs)} documents to existing FAISS index.")
+        docs = [Document(page_content=t, metadata=m) for t, m in zip(texts, metadatas)]
+        if store is None:
+            store = FAISS.from_documents(docs, emb_model)
+            logger.info(f"Created new FAISS index for user_id={user_id} with {len(docs)} documents.")
+        else:
+            store.add_documents(docs)
+            logger.info(f"Added {len(docs)} documents to FAISS index for user_id={user_id}.")
 
-    _persist_faiss()
-    return len(docs)
+    _vector_stores[user_id] = store
+    _persist_faiss(user_id)
+    return len(texts)
 
 
 def search_faiss(
+    user_id: int,
     query: str,
     top_k: int = TOP_K_RETRIEVAL,
     source: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Semantic similarity search on FAISS.
-    Optionally filter by source filename (post-filter).
-    Returns list of chunk dicts with 'text', 'source', 'score', etc.
-    """
-    store = get_vector_store()
+    """Semantic similarity search scoped to this user's FAISS index only."""
+    store = get_vector_store(user_id)
     if store is None:
         return []
 
@@ -168,8 +182,6 @@ def search_faiss(
         for doc, dist in results:
             if source and doc.metadata.get("source") != source:
                 continue
-            # FAISS L2 distance with normalized vectors → cosine similarity = 1 - dist²/2
-            # LangChain's default fn: score = 1 - dist/2  (approximate)
             similarity = max(0.0, round(1.0 - float(dist) / 2.0, 4))
             chunks.append({
                 "text":        doc.page_content,
@@ -186,16 +198,13 @@ def search_faiss(
         return chunks
 
     except Exception as e:
-        logger.error(f"FAISS search failed: {e}")
+        logger.error(f"FAISS search failed for user_id={user_id}: {e}")
         return []
 
 
-def fetch_all_chunks_for_source(source: str) -> List[Dict[str, Any]]:
-    """
-    Return all indexed chunks for a specific source file.
-    Used by summary/recommendations endpoints.
-    """
-    store = get_vector_store()
+def fetch_all_chunks_for_source(user_id: int, source: str) -> List[Dict[str, Any]]:
+    """Return all indexed chunks for a specific source file, scoped to this user."""
+    store = get_vector_store(user_id)
     if store is None:
         return []
 
@@ -213,87 +222,110 @@ def fetch_all_chunks_for_source(source: str) -> List[Dict[str, Any]]:
                     "chunk_index": doc.metadata.get("chunk_index", 0),
                     "score":       1.0,
                 })
-        # Sort by chunk_index for coherent reading order
         chunks.sort(key=lambda x: x["chunk_index"])
     except Exception as e:
-        logger.error(f"fetch_all_chunks_for_source failed: {e}")
+        logger.error(f"fetch_all_chunks_for_source failed for user_id={user_id}: {e}")
 
     return chunks
 
 
-def _rmtree_windows_safe(path: Path):
+def _cleanup_faiss_files(user_id: int):
     """
-    Remove a directory tree safely on Windows.
-    Windows memory-maps FAISS files, so we must force GC before rmtree,
-    and fall back to per-file deletion if the directory remove still fails.
+    Windows-safe cleanup of this user's FAISS index files.
+    Retries per-file deletion with exponential back-off to handle
+    memory-mapped file locks that Windows holds briefly after the
+    Python GC releases the FAISS store object.
     """
     import gc
+    import time
+
     gc.collect()
-    try:
-        shutil.rmtree(path)
-    except PermissionError:
-        # GC wasn't enough — delete files individually, ignore locked ones
-        for f in path.iterdir():
+    time.sleep(0.15)
+
+    index_dir = user_faiss_index_dir(user_id)
+    for fname in ["index.faiss", "index.pkl"]:
+        fpath = index_dir / fname
+        for attempt in range(6):
             try:
-                f.unlink()
-            except Exception:
-                pass
-        try:
-            path.rmdir()
-        except Exception:
-            pass
+                if fpath.exists():
+                    fpath.unlink()
+                break
+            except (PermissionError, OSError):
+                time.sleep(0.25 * (attempt + 1))
+
+    try:
+        index_dir.rmdir()
+    except Exception:
+        pass
+
+    index_dir.mkdir(parents=True, exist_ok=True)
 
 
-def rebuild_faiss_without(source: str) -> int:
+def rebuild_faiss_without(user_id: int, source: str) -> int:
     """
-    Delete all chunks belonging to `source` by rebuilding the FAISS index.
-    FAISS does not support in-place deletion, so we rebuild.
-    Returns number of chunks deleted.
-    Raises RuntimeError on failure so callers get a meaningful error.
+    Delete all chunks belonging to `source` (for this user only) by rebuilding
+    their FAISS index. FAISS does not support in-place deletion, so we rebuild.
+    Returns number of chunks deleted. Raises RuntimeError on failure.
     """
-    global _vector_store
     from langchain_community.vectorstores import FAISS
 
-    store = get_vector_store()
+    store = get_vector_store(user_id)
     if store is None:
         return 0
 
-    kept, deleted = [], 0
-    for idx, doc_id in store.index_to_docstore_id.items():
+    kept_docs: List = []
+    kept_vecs: List = []
+    deleted = 0
+
+    for idx in range(store.index.ntotal):
+        doc_id = store.index_to_docstore_id.get(idx)
+        if doc_id is None:
+            continue
         doc = store.docstore.search(doc_id)
         if not hasattr(doc, "page_content"):
             continue
         if doc.metadata.get("source") == source:
             deleted += 1
         else:
-            kept.append(doc)
+            kept_docs.append(doc)
+            try:
+                kept_vecs.append(store.index.reconstruct(idx).tolist())
+            except Exception:
+                kept_vecs.append(None)
 
     if deleted == 0:
-        return 0  # source not in index — caller handles 404
+        return 0
 
     try:
-        if not kept:
-            # Release the store *before* touching the files on disk
-            _vector_store = None
-            if FAISS_INDEX_DIR.exists():
-                _rmtree_windows_safe(FAISS_INDEX_DIR)
-            FAISS_INDEX_DIR.mkdir(parents=True, exist_ok=True)
-        else:
-            embeddings = get_embeddings()
-            _vector_store = FAISS.from_documents(kept, embeddings)
-            _persist_faiss()
+        _vector_stores[user_id] = None  # release mmap references before file ops
 
-        logger.info(f"FAISS rebuilt: removed {deleted} chunks from '{source}'.")
+        if not kept_docs:
+            _cleanup_faiss_files(user_id)
+        else:
+            valid_pairs = [(d, v) for d, v in zip(kept_docs, kept_vecs) if v is not None]
+            if not valid_pairs:
+                raise RuntimeError("Could not reconstruct any vectors from FAISS index.")
+
+            valid_docs, valid_vecs = zip(*valid_pairs)
+            text_emb_pairs = [(d.page_content, v) for d, v in zip(valid_docs, valid_vecs)]
+            _vector_stores[user_id] = FAISS.from_embeddings(
+                text_emb_pairs,
+                get_embeddings(),
+                metadatas=[d.metadata for d in valid_docs],
+            )
+            _persist_faiss(user_id)
+
+        logger.info(f"FAISS rebuilt for user_id={user_id}: removed {deleted} chunks from '{source}'.")
     except Exception as e:
-        logger.error(f"FAISS rebuild failed: {e}")
+        logger.error(f"FAISS rebuild failed for user_id={user_id}: {e}")
         raise RuntimeError(f"Failed to rebuild FAISS index after removing '{source}': {e}")
 
     return deleted
 
 
-def get_total_vectors() -> int:
-    """Return total number of vectors in the FAISS index."""
-    store = get_vector_store()
+def get_total_vectors(user_id: int) -> int:
+    """Return total number of vectors in this user's FAISS index."""
+    store = get_vector_store(user_id)
     if store is None:
         return 0
     try:
@@ -303,33 +335,36 @@ def get_total_vectors() -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# FILE-LEVEL METADATA  (separate JSON — FAISS stores chunk-level only)
+# FILE-LEVEL METADATA  (per-user JSON — FAISS stores chunk-level only)
 # ══════════════════════════════════════════════════════════════════════
 
-def load_file_metadata() -> Dict[str, Any]:
-    if FAISS_METADATA_PATH.exists():
+def load_file_metadata(user_id: int) -> Dict[str, Any]:
+    path = user_faiss_metadata_path(user_id)
+    if path.exists():
         try:
-            with open(FAISS_METADATA_PATH) as f:
+            with open(path) as f:
                 return json.load(f)
         except Exception:
             pass
     return {}
 
 
-def _save_file_metadata(meta: Dict[str, Any]):
-    FAISS_METADATA_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(FAISS_METADATA_PATH, "w") as f:
+def _save_file_metadata(user_id: int, meta: Dict[str, Any]):
+    path = user_faiss_metadata_path(user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
         json.dump(meta, f, indent=2)
 
 
 def upsert_file_metadata(
+    user_id: int,
     filename: str,
     file_type: str,
     language: str,
     chunk_count: int,
     timestamp: str,
 ):
-    meta = load_file_metadata()
+    meta = load_file_metadata(user_id)
     existing = meta.get(filename, {})
     meta[filename] = {
         "source":      filename,
@@ -338,90 +373,22 @@ def upsert_file_metadata(
         "chunk_count": existing.get("chunk_count", 0) + chunk_count,
         "timestamp":   timestamp,
     }
-    _save_file_metadata(meta)
+    _save_file_metadata(user_id, meta)
 
 
-def remove_file_metadata(filename: str):
-    meta = load_file_metadata()
+def remove_file_metadata(user_id: int, filename: str):
+    meta = load_file_metadata(user_id)
     meta.pop(filename, None)
-    _save_file_metadata(meta)
+    _save_file_metadata(user_id, meta)
 
 
-def list_file_metadata() -> List[Dict[str, Any]]:
-    meta = load_file_metadata()
+def list_file_metadata(user_id: int) -> List[Dict[str, Any]]:
+    meta = load_file_metadata(user_id)
     return sorted(meta.values(), key=lambda x: x.get("timestamp", ""), reverse=True)
 
 
 # ══════════════════════════════════════════════════════════════════════
-# MISTRAL LLM
-# ══════════════════════════════════════════════════════════════════════
-
-def get_mistral_llm():
-    """Return singleton Mistral LLM via LangChain. None if API key missing."""
-    global _llm
-    if _llm is not None:
-        return _llm
-    if not MISTRAL_API_KEY:
-        return None
-
-    try:
-        from langchain_mistralai import ChatMistralAI
-        _llm = ChatMistralAI(
-            mistral_api_key=MISTRAL_API_KEY,
-            model=MISTRAL_MODEL,
-            temperature=LLM_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
-        )
-        logger.info(f"Mistral LLM initialized: {MISTRAL_MODEL}")
-    except Exception as e:
-        logger.warning(f"LangChain Mistral init failed: {e}. Trying mistralai SDK directly...")
-        _llm = None  # will retry on next call if needed
-
-    return _llm
-
-
-def _invoke_mistral(system_prompt: str, user_content: str) -> Optional[str]:
-    """
-    Call Mistral via LangChain ChatMistralAI.
-    Falls back to direct mistralai SDK if LangChain wrapper fails.
-    Returns response string or None on failure.
-    """
-    # Try LangChain wrapper first
-    llm = get_mistral_llm()
-    if llm:
-        try:
-            from langchain_core.messages import SystemMessage, HumanMessage
-            response = llm.invoke([
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_content),
-            ])
-            return response.content.strip()
-        except Exception as e:
-            logger.warning(f"LangChain Mistral call failed: {e}. Trying direct SDK...")
-
-    # Direct SDK fallback
-    if MISTRAL_API_KEY:
-        try:
-            from mistralai import Mistral
-            client = Mistral(api_key=MISTRAL_API_KEY)
-            chat_response = client.chat.complete(
-                model=MISTRAL_MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user",   "content": user_content},
-                ],
-                max_tokens=LLM_MAX_TOKENS,
-                temperature=LLM_TEMPERATURE,
-            )
-            return chat_response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.error(f"Direct Mistral SDK call failed: {e}")
-
-    return None
-
-
-# ══════════════════════════════════════════════════════════════════════
-# RAG CHAIN
+# RAG / SUMMARY / RECOMMENDATIONS CHAINS  (via LLM Service Layer)
 # ══════════════════════════════════════════════════════════════════════
 
 _RAG_SYSTEM = """You are an AI Document Intelligence Assistant.
@@ -434,11 +401,8 @@ RULES:
 - Short factual answers: 1-2 sentences. Explanatory answers: 3-5 sentences max.
 """
 
-def run_rag_chain(query: str, context_chunks: List[Dict]) -> str:
-    """
-    LangChain RAG pipeline:
-      retrieved chunks → structured prompt → Mistral → answer
-    """
+def run_rag_chain(db, query: str, context_chunks: List[Dict]) -> str:
+    """Retrieved chunks -> structured prompt -> active LLM provider -> answer."""
     if not context_chunks:
         return "No documents indexed yet. Please upload a file first."
 
@@ -448,22 +412,26 @@ def run_rag_chain(query: str, context_chunks: List[Dict]) -> str:
     ])
     user_content = f"Document Context:\n{context_str}\n\nQuestion: {query}"
 
-    answer = _invoke_mistral(_RAG_SYSTEM, user_content)
+    from llm_service import invoke_raw
+    answer = invoke_raw(db, _RAG_SYSTEM, user_content)
     if answer:
         return answer
 
-    # Local synthesizer fallback (from llm.py)
     try:
-        from llm import _smart_synthesize, _build_prompt_str
+        from llm import _smart_synthesize, _build_prompt_str, _is_readable
         prompt_str = _build_prompt_str(context_chunks, query)
-        return _smart_synthesize(query, prompt_str)
-    except Exception:
-        return context_chunks[0]["text"][:400] if context_chunks else "Unable to generate answer."
+        answer = _smart_synthesize(query, prompt_str)
+        if answer and _is_readable(answer):
+            return answer
+    except Exception as e:
+        logger.warning(f"Local synthesizer failed: {e}")
 
+    return (
+        "No configured LLM provider is currently reachable and the document content could not be "
+        "synthesized locally. Check that Ollama is running (OLLAMA_BASE_URL) or that a MISTRAL_API_KEY "
+        "/ OPENAI_API_KEY is set."
+    )
 
-# ══════════════════════════════════════════════════════════════════════
-# SUMMARY CHAIN
-# ══════════════════════════════════════════════════════════════════════
 
 _SUMMARY_SYSTEM = """You are a professional document summarization expert.
 Always respond with valid JSON only — no extra text, no markdown fences.
@@ -474,31 +442,25 @@ JSON schema:
 }
 """
 
-def run_summary_chain(context_chunks: List[Dict]) -> Dict[str, Any]:
-    """
-    Generate a structured document summary using Mistral.
-    Input: list of chunk dicts (uses first 15 for token budget).
-    Output: {"summary": str, "key_points": [str, ...]}
-    """
+def run_summary_chain(db, context_chunks: List[Dict]) -> Dict[str, Any]:
     if not context_chunks:
         return {"summary": "No document content available.", "key_points": []}
 
-    # Use first 15 chunks (≈ 12000 chars) to stay within token limits
     combined = "\n\n".join(c["text"] for c in context_chunks[:15])
     user_content = f"Summarize the following document:\n\n{combined}"
 
-    raw = _invoke_mistral(_SUMMARY_SYSTEM, user_content)
+    from llm_service import invoke_raw
+    raw = invoke_raw(db, _SUMMARY_SYSTEM, user_content)
     if raw:
         result = _parse_json_response(raw)
         if result:
             return result
 
-    # Fallback: extract sentences manually
     return _fallback_summary(context_chunks)
 
 
 def _fallback_summary(chunks: List[Dict]) -> Dict[str, Any]:
-    """Simple extractive summary when LLM is unavailable."""
+    """Simple extractive summary when no LLM provider is reachable."""
     all_text = " ".join(c["text"] for c in chunks[:10])
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", all_text) if len(s.strip()) > 30]
     return {
@@ -506,10 +468,6 @@ def _fallback_summary(chunks: List[Dict]) -> Dict[str, Any]:
         "key_points": sentences[3:10],
     }
 
-
-# ══════════════════════════════════════════════════════════════════════
-# RECOMMENDATIONS CHAIN
-# ══════════════════════════════════════════════════════════════════════
 
 _RECOMMENDATIONS_SYSTEM = """You are an expert at generating insightful questions from document content.
 Always respond with valid JSON only — no extra text, no markdown fences.
@@ -524,11 +482,7 @@ JSON schema:
 Generate 5-8 meaningful, specific questions that are directly answerable from the document.
 """
 
-def run_recommendations_chain(context_chunks: List[Dict]) -> Dict[str, Any]:
-    """
-    Generate recommended exploration questions from document content.
-    Output: {"recommended_questions": [str, ...]}
-    """
+def run_recommendations_chain(db, context_chunks: List[Dict]) -> Dict[str, Any]:
     if not context_chunks:
         return {"recommended_questions": []}
 
@@ -539,13 +493,13 @@ def run_recommendations_chain(context_chunks: List[Dict]) -> Dict[str, Any]:
         + combined
     )
 
-    raw = _invoke_mistral(_RECOMMENDATIONS_SYSTEM, user_content)
+    from llm_service import invoke_raw
+    raw = invoke_raw(db, _RECOMMENDATIONS_SYSTEM, user_content)
     if raw:
         result = _parse_json_response(raw)
         if result:
             return result
 
-    # Fallback: generic questions
     source = context_chunks[0].get("source", "this document") if context_chunks else "this document"
     return {
         "recommended_questions": [
@@ -568,7 +522,6 @@ def _parse_json_response(raw: str) -> Optional[Dict]:
         return json.loads(raw)
     except json.JSONDecodeError:
         pass
-    # Try to extract JSON block
     m = re.search(r'\{.*\}', raw, re.DOTALL)
     if m:
         try:

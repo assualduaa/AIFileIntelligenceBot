@@ -1,11 +1,16 @@
 """
 llm.py - LLM response engine
-v2: Mistral (primary) -> OpenAI (fallback) -> local synthesizer (offline)
+v3: Ollama (primary, offline) -> Mistral -> OpenAI -> local synthesizer (offline)
+
+Provider selection/fallback now lives in llm_service.py (the LLM Service
+Layer). This module still owns the actual Mistral/OpenAI SDK calls (reused
+by llm_provider_external.py) and the offline regex-based local synthesizer,
+preserved untouched as the final fallback when no provider is reachable.
 
 Public API:
-  generate_response(prompt_context, query, chat_history) -> Dict
-  generate_summary(context_chunks)                       -> Dict
-  generate_recommendations(context_chunks)               -> Dict
+  generate_response(db, prompt_context, query, chat_history) -> Dict
+  generate_summary(db, context_chunks)                       -> Dict
+  generate_recommendations(db, context_chunks)                -> Dict
   _smart_synthesize(query, prompt_context)               -- langchain_pipeline fallback
   _build_prompt_str(chunks, query)                       -- langchain_pipeline helper
 """
@@ -36,27 +41,23 @@ _RAG_SYSTEM = (
 # PRIMARY ENTRY POINTS
 # ======================================================================
 
-def generate_response(prompt_context, query, chat_history=None):
-    chat_history = chat_history or []
-    if MISTRAL_API_KEY:
-        result = _mistral_response(prompt_context, query, chat_history)
-        if result:
-            return result
-    if OPENAI_API_KEY:
-        result = _openai_response(prompt_context, query, chat_history)
-        if result:
-            return result
-    return _local_response(prompt_context, query)
+def generate_response(db, prompt_context, query, chat_history=None):
+    """Delegates to the LLM Service Layer (llm_service.py), which tries the
+    admin-configured active provider first (Ollama by default), then falls
+    back through the remaining providers, and finally to _local_response()
+    below if nothing is reachable."""
+    from llm_service import generate_response as _service_generate_response
+    return _service_generate_response(db, prompt_context, query, chat_history)
 
 
-def generate_summary(context_chunks):
-    from langchain_pipeline import run_summary_chain
-    return run_summary_chain(context_chunks)
+def generate_summary(db, context_chunks):
+    from llm_service import generate_summary as _service_generate_summary
+    return _service_generate_summary(db, context_chunks)
 
 
-def generate_recommendations(context_chunks):
-    from langchain_pipeline import run_recommendations_chain
-    return run_recommendations_chain(context_chunks)
+def generate_recommendations(db, context_chunks):
+    from llm_service import generate_recommendations as _service_generate_recommendations
+    return _service_generate_recommendations(db, context_chunks)
 
 
 # ======================================================================
@@ -141,8 +142,14 @@ def _openai_response(prompt_context, query, chat_history):
 # ======================================================================
 
 def _local_response(prompt_context, query):
-    return {"answer": _smart_synthesize(query, prompt_context),
-            "model": "local-synthesizer", "mode": "offline", "tokens": 0}
+    answer = _smart_synthesize(query, prompt_context)
+    # If synthesizer returned garbled or empty text, give a clear API-unavailable message
+    if not answer or not _is_readable(answer, threshold=0.40):
+        answer = (
+            "The AI model is currently unavailable (no valid API key). "
+            "Please add your MISTRAL_API_KEY to the .env file and restart the server."
+        )
+    return {"answer": answer, "model": "local-synthesizer", "mode": "offline", "tokens": 0}
 
 
 # ── Helpers used by langchain_pipeline ────────────────────────────────
@@ -163,6 +170,19 @@ def _extract_chunks(prompt_context):
     raw   = prompt_context[start:end].strip() if end != -1 else prompt_context[start:].strip()
     parts = re.split(r"\[\d+\]\s+Source:.*?\n", raw)
     return [p.strip() for p in parts if len(p.strip()) > 20]
+
+
+def _extract_sources(prompt_context):
+    """Extract unique source filenames from the prompt context block."""
+    return list(dict.fromkeys(re.findall(r"\[\d+\]\s+Source:\s*([^\s(]+)", prompt_context)))
+
+
+def _is_readable(text: str, threshold: float = 0.50) -> bool:
+    """Return True if text has enough alphabetic / digit characters to be meaningful."""
+    if not text or len(text) < 8:
+        return False
+    readable = sum(1 for c in text if c.isalpha() or c.isdigit() or c in " .,!?;:()'\"")
+    return readable / len(text) >= threshold
 
 
 def _sentences(text):
@@ -194,12 +214,53 @@ def _normalize(q):
     return re.sub(r"[^\w\s]", " ", q).strip()
 
 
+_COMPANY_WORDS = {
+    "real", "estate", "international", "company", "limited", "ltd", "llc",
+    "inc", "corp", "group", "solutions", "services", "technologies", "seeking",
+    "hiring", "agency", "institute", "association", "foundation", "enterprise",
+}
+
+def _is_company_name(name: str) -> bool:
+    """Return True if the name looks like an organisation rather than a person."""
+    parts = name.lower().split()
+    return any(p in _COMPANY_WORDS for p in parts) or len(parts) > 3
+
+
 def _extract_name(full_text):
-    for pat in [r"\b(ASNA\s+SHERIN[^+\n]*)", r"^([A-Z][A-Z ]{4,})\s*\n",
-                r"\b([A-Z][a-z]+ [A-Z][a-z]+)\b"]:
-        m = re.search(pat, full_text)
-        if m:
-            return m.group(1).strip().title()
+    """
+    Extract candidate / person name from resume text.
+    Strategy (in priority order):
+      1. ALL-CAPS block at the very top of the doc (first 600 chars) — skip company words
+      2. Name hinted by LinkedIn URL username (e.g. linkedin.com/in/asnasherin)
+      3. Title-Case "First Last" pair — skip any that look like company names
+    """
+    # ── 1. ALL-CAPS name near the top of the document ────────────────────
+    top = full_text[:600]
+    for m in re.finditer(r'\b([A-Z]{2,}(?:\s+[A-Z]{2,}){1,3})\b', top):
+        candidate = m.group(1).strip().title()
+        if not _is_company_name(candidate):
+            return candidate
+
+    # ── 2. LinkedIn URL → username → match ALL-CAPS block in full text ──
+    li = re.search(r'linkedin\.com/in/([a-zA-Z0-9\-]+)/?', full_text, re.IGNORECASE)
+    if li:
+        username = re.sub(r'[\-_]', ' ', li.group(1)).lower()
+        # Try to find an ALL-CAPS version of this name in the text
+        parts = username.split()
+        if len(parts) >= 2:
+            pat = r'\b(' + r'\s+'.join(p.upper() for p in parts) + r')\b'
+            m = re.search(pat, full_text)
+            if m:
+                return m.group(1).strip().title()
+        # Fallback: capitalise the username
+        return ' '.join(p.capitalize() for p in parts)
+
+    # ── 3. Title-Case "First Last" — skip company names ──────────────────
+    for m in re.finditer(r'\b([A-Z][a-z]{1,14}\s+[A-Z][a-z]{1,14})\b', full_text):
+        candidate = m.group(1)
+        if not _is_company_name(candidate):
+            return candidate
+
     return None
 
 
@@ -222,18 +283,38 @@ def _extract_employer(full_text, sents):
 
 
 def _extract_role_title(full_text, sents):
+    # 1. Look for "applying for the <Role>" pattern (cover letters)
+    m = re.search(r"applying for (?:the )?([A-Z][A-Za-z &/\-]{3,60})\s*(?:role|position|post)?",
+                  full_text, re.IGNORECASE)
+    if m:
+        return m.group(1).strip().rstrip("role position post".split()[0])[:120]
+
+    # 2. Specific known title patterns
     m = re.search(r"(Data\s*[&|]\s*Business\s*Intelligence[^\n+]{0,120})", full_text, re.IGNORECASE)
     if m:
         raw = re.sub(r"\+\d[\d\s]{8,}", "", m.group(1))
         raw = re.sub(r"[|]\s*\S+@\S+", "", raw)
         return re.sub(r"\s+", " ", raw).strip().strip("|").strip()[:120]
+
+    # 3. Sentence scan — skip salutations like "Dear Hiring Manager"
+    SALUTATION_SKIP = re.compile(r"^(dear|to whom|hello|hi)\b", re.IGNORECASE)
     for s in sents:
-        if any(t in s for t in ["Analyst","Developer","Expert","Manager","Engineer"]):
+        if SALUTATION_SKIP.match(s.strip()):
+            continue
+        if any(t in s for t in ["Analyst","Developer","Expert","Manager","Engineer","Specialist","Consultant"]):
             title = re.sub(r"^[A-Z][A-Z ]{3,}\s*", "",
                            s.split("+971")[0].split("*")[0].strip()).strip()
             if len(title) > 5:
                 return title[:120]
     return None
+
+
+def _bullet_list(sents: list, max_items: int = 8) -> str:
+    """Format a list of sentences as a readable bullet list."""
+    clean = [s.strip().rstrip(".") for s in sents if _is_readable(s)]
+    if not clean:
+        return ""
+    return "\n".join(f"• {s}" for s in clean[:max_items])
 
 
 def _smart_synthesize(query, prompt_context):
@@ -243,16 +324,40 @@ def _smart_synthesize(query, prompt_context):
 
     full_text = " ".join(chunks)
     sents     = _sentences(full_text)
+    readable  = [s for s in sents if _is_readable(s)]
     q         = _normalize(query)
 
+    # ── File / document name query ────────────────────────────────────────
+    if any(p in q for p in ["name of the file","file name","filename","document name",
+                              "name of document","name of this file","what file"]):
+        sources = _extract_sources(prompt_context)
+        if sources:
+            names = ", ".join(sources)
+            return f"The document{'s' if len(sources) > 1 else ''} in context: {names}"
+        return "The file name is not available in the current context."
+
+    # ── Identity ──────────────────────────────────────────────────────────
     if any(p in q for p in ["your name","who are you","what are you"]):
-        return "I am the AI File Intelligence Bot -- a RAG-powered assistant that answers questions from your uploaded documents."
+        return "I am the AI File Intelligence Bot — a RAG-powered assistant that answers questions from your uploaded documents."
 
-    if any(p in q for p in ["whose resume","whose cv","this resume","resume belong","cv belong","who is this"]):
+    # ── Resume: identity (expanded) ───────────────────────────────────────
+    if any(p in q for p in ["whose resume","whose cv","this resume","resume belong",
+                              "cv belong","who is this","who does this","who wrote",
+                              "whose name","name is visible","name visible","name shown",
+                              "name appear","name on"]):
         name = _extract_name(full_text)
-        return ("This is the resume of " + name + ".") if name else \
-               "This resume belongs to the candidate described in the uploaded document."
+        if name:
+            # Cross-check: does the name appear in the readable context?
+            name_in_ctx = any(name.lower() in s.lower() for s in readable)
+            qualifier = "" if name_in_ctx else " (based on available context)"
+            return f"This is the resume of {name}{qualifier}."
+        # Try to find a LinkedIn URL as a hint
+        li = re.search(r'linkedin\.com/in/([a-zA-Z0-9\-]+)/?', full_text, re.IGNORECASE)
+        if li:
+            return f"The candidate's LinkedIn is: linkedin.com/in/{li.group(1)}"
+        return "The candidate's name could not be clearly identified from the retrieved context."
 
+    # ── Resume: current employer ──────────────────────────────────────────
     if any(p in q for p in ["current employer","current company","current job","currently work",
                               "last experience","most recent","last company","last job"]):
         employer = _extract_employer(full_text, sents)
@@ -261,53 +366,120 @@ def _smart_synthesize(query, prompt_context):
             return (role + " at " + employer + ".") \
                    if not any(t in employer for t in ["Analyst","Developer","Expert"]) \
                    else employer + "."
-        return ("She currently works at " + employer + ".") if employer else \
+        return ("Currently works at " + employer + ".") if employer else \
                "The current employer is not explicitly stated in the document."
 
+    # ── Resume: role / title ──────────────────────────────────────────────
     if any(p in q for p in ["position","role","title","designation","job title","what position"]):
         title = _extract_role_title(full_text, sents)
         return title if title else "The position is not clearly identified in the retrieved context."
 
-    if any(p in q for p in ["her name","his name","person name","full name","candidate name"]):
+    # ── Resume: name ──────────────────────────────────────────────────────
+    if any(p in q for p in ["her name","his name","person name","full name","candidate name",
+                              "applicant name","employee name","what is the name","what name",
+                              "name of the person","name of the candidate"]):
         name = _extract_name(full_text)
         return (name + ".") if name else "The name is not clearly extractable from the document."
 
+    # ── Location ──────────────────────────────────────────────────────────
     if any(p in q for p in ["where","location","based","city","country","live"]):
-        hits = _find(sents, ["abu dhabi","dubai","uae","located","based in"], n=1)
+        hits = _find(readable, ["located","based in","address","city","country","state","province",
+                                 "abu dhabi","dubai","uae","india","kerala"], n=2)
         if hits:
-            return hits[0].strip()
-        loc = re.search(r"Abu Dhabi|Dubai|UAE", full_text, re.IGNORECASE)
-        return ("Based in " + loc.group(0) + ".") if loc else "Location not explicitly stated."
+            return "\n".join(hits)
+        loc = re.search(r"[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\s*,\s*[A-Z][a-z]+", full_text)
+        return loc.group(0) if loc else "Location not explicitly stated in the document."
 
+    # ── Contact ──────────────────────────────────────────────────────────
     if any(p in q for p in ["email","phone","contact","number","linkedin","github"]):
-        hits = _find(sents, ["@","+971","linkedin","github"], n=1)
-        return hits[0].strip() if hits else "Contact details not found in the retrieved context."
+        hits = _find(readable, ["@","linkedin","github","phone","tel","mobile","+"], n=2)
+        return "\n".join(hits) if hits else "Contact details not found in the retrieved context."
 
-    if any(p in q for p in ["years of experience","how many years","how long","total experience"]):
-        hits = _find(sents, ["10 years","years of","extensive experience","over 10","decade"], n=1)
-        return hits[0].strip() if hits else "Total years of experience are not clearly stated."
+    # ── Experience / duration ─────────────────────────────────────────────
+    if any(p in q for p in ["years of experience","how many years","how long","total experience","experience"]):
+        hits = _find(readable, ["year","experience","since","from","worked","employed"], n=4)
+        result = _bullet_list(hits, max_items=5)
+        return result if result else "Experience details not clearly stated in the document."
 
-    if any(p in q for p in ["skills","tools","technologies","tech stack","expertise"]):
-        hits = _find(sents, ["Power BI","Python","SQL","Excel","Tableau","DAX","ETL","Analytics"], n=3)
-        return _trim(" ".join(hits[:2]), 4) if hits else \
-               "Skills information is not clearly captured in the retrieved context."
+    # ── Skills / tools / technologies ────────────────────────────────────
+    if any(p in q for p in ["skill","tool","technolog","tech stack","expertise","competenc",
+                              "profic","capabilit","abilit","what can"]):
+        # Broad keyword set — catches both technical and soft skills
+        skill_kw = [
+            "skill","profic","expert","knowledge","certif","tool","technolog",
+            "able","compet","capab","familiar","experienc","develop","analyt",
+            "manage","communic","problem","team","leader","solv","design",
+            "Power BI","Python","SQL","Excel","Tableau","DAX","ETL","Power Query",
+            "Microsoft","programming","database","software","cloud","Azure","AWS",
+        ]
+        hits = _find(readable, skill_kw, n=12)
+        if not hits:
+            # Fallback: return all readable sents from context
+            hits = readable
+        result = _bullet_list(hits, max_items=10)
+        return result if result else "Skills information is not clearly captured in the retrieved context."
 
-    if any(p in q for p in ["qualif","certif","degree","education","certified"]):
-        hits = _find(sents, ["certif","CSM","scrum","degree","bachelor","master"], n=3)
-        return " ".join(hits[:2]).strip() if hits else "Qualification details not found."
+    # ── Qualifications / education / certificates ─────────────────────────
+    if any(p in q for p in ["qualif","certif","degree","education","certified","academ","study","studied"]):
+        hits = _find(readable, ["certif","degree","bachelor","master","diploma","university",
+                                 "college","school","studied","graduate","CSM","scrum","course"], n=6)
+        result = _bullet_list(hits, max_items=6)
+        return result if result else "Qualification details not found in the retrieved context."
 
+    # ── User asking to confirm their own statement ────────────────────────
+    if any(p in q for p in ["am i right","am i correct","is that right","is that correct",
+                              "correct me","right?","correct?","isnt it","isn t it",
+                              "na?","na right","isn t that"]):
+        # Pull any context-matching evidence from retrieved chunks
+        # Extract nouns/entities the user mentioned (words > 3 chars, not stop words)
+        stop = {"that","this","right","correct","wrong","about","from","with","have","does"}
+        keywords = [w for w in re.sub(r"[^\w\s]","",q).split()
+                    if len(w) > 3 and w not in stop]
+        hits = _find(readable, keywords, n=3)
+        evidence = [s for s in hits if _is_readable(s)]
+        if evidence:
+            return "Yes, that is correct. " + evidence[0].strip() + "."
+        # No specific match — give a general confirmation using name extraction
+        name = _extract_name(full_text)
+        if name and name.lower() in q.lower():
+            return f"Yes, you are right. This is {name}'s document."
+        return ("Yes, based on the document that appears to be correct."
+                if any(p in q for p in ["right","correct"]) else
+                "The document does not clearly confirm or deny this.")
+
+    # ── Yes/No questions ──────────────────────────────────────────────────
     first_word = q.split()[0] if q.split() else ""
     if first_word in ("is","does","did","has","can","are","was","have"):
         keywords = [w for w in q.split() if len(w) > 3]
-        hits = _find(sents, keywords, n=2)
-        return ("Yes. " + hits[0].strip()) if hits else \
-               "The document does not clearly confirm or deny this."
+        hits = _find(readable, keywords, n=3)
+        if hits:
+            return "Yes. " + hits[0].strip()
+        return "The document does not clearly confirm or deny this."
 
-    if any(p in q for p in ["summary","background","about","overview","tell me","describe","who is","profile"]):
-        hits = _find(sents, ["professional","analyst","experience","expert","data","business"], n=4)
-        return _trim(" ".join((hits or sents)[:3]), 5)
+    # ── Summary / overview ────────────────────────────────────────────────
+    if any(p in q for p in ["summary","background","about","overview","tell me","describe",
+                              "who is","profile","introduction","main"]):
+        hits = _find(readable, ["professional","experienc","expert","analyt","develop",
+                                 "business","specialist","background","overview"], n=5)
+        pool = (hits or readable)[:5]
+        return _trim(" ".join(pool), 6)
 
-    keywords = [w for w in re.sub(r"[^\w\s]","",q).split() if len(w) > 3]
-    hits     = _find(sents, keywords, n=3)
-    return _trim(" ".join((hits or sents[:2])[:2]), 3) or \
-           "The document does not contain enough relevant information to answer this query."
+    # ── "What else" / "more" / follow-up questions ───────────────────────
+    if any(p in q for p in ["what else","anything else","more","other","also mention",
+                              "besides","additional","further","else is","rest"]):
+        result = _bullet_list(readable, max_items=8)
+        return result if result else "No additional information found in the retrieved context."
+
+    # ── Generic keyword search ────────────────────────────────────────────
+    keywords = [w for w in re.sub(r"[^\w\s]", "", q).split() if len(w) > 3]
+    hits     = _find(readable, keywords, n=5)
+    readable_hits = [s for s in hits if _is_readable(s)]
+    if readable_hits:
+        result = _bullet_list(readable_hits, max_items=6)
+        return result if result else _trim(" ".join(readable_hits[:3]), 4)
+
+    # Last resort: return first few readable sentences
+    if readable:
+        return _bullet_list(readable[:4], max_items=4)
+
+    return "The document does not contain enough relevant information to answer this query."

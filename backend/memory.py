@@ -73,16 +73,20 @@ class MemoryManager:
 
     def build_context(
         self,
-        user_id:    str,
+        user_id,          # int — this user's DB id, used both for memory.json lookup and FAISS scoping
         session_id: str,
         query:      str,
         top_k:      int = 5,
     ) -> Dict[str, Any]:
+        """NOTE: superseded by api.py's direct retrieve_context()/chat_history.py flow
+        for the main /chat and /query endpoints as of v3. Kept functional (not removed)
+        in case other code still calls it — retrieve_context() now requires a user_id
+        for per-user FAISS isolation, which this signature already provided."""
         from retrieval import retrieve_context  # avoid circular import
 
         session_mem  = get_session_memory(session_id)
-        user_mem     = get_user_memory(user_id)
-        semantic_mem = retrieve_context(query, top_k=top_k)
+        user_mem     = get_user_memory(str(user_id))
+        semantic_mem = retrieve_context(user_id, query, top_k=top_k)
 
         return {
             "session":  session_mem,

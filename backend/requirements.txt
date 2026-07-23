@@ -33,6 +33,16 @@ mistralai>=1.0.0
 # OpenAI (Legacy fallback, optional)
 openai>=1.30.0
 
+# Ollama (Local LLM — CR-01 primary offline provider)
+# No SDK required: talked to directly over HTTP via httpx (see llm_provider_ollama.py)
+
+# Database + Auth (CR-01: users, documents, conversations, chat_messages, models)
+sqlalchemy>=2.0.0
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1            # pinned: passlib 1.7.4's version probe breaks on bcrypt>=4.1 (raises on hash())
+PyJWT>=2.8.0
+email-validator>=2.1.0   # required by pydantic EmailStr
+
 # Utilities
 aiofiles>=23.2.1
 httpx>=0.27.0

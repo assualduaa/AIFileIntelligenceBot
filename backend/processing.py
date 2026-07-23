@@ -10,6 +10,47 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+# ── OCR Text Cleaner ───────────────────────────────────────────────────
+def clean_ocr_text(text: str) -> str:
+    """
+    Remove common OCR artefacts from extracted text.
+    Keeps lines where at least 45 % of characters are readable
+    (letters, digits, common punctuation).
+    """
+    if not text:
+        return text
+
+    import re
+
+    # Strip Unicode replacement characters
+    text = text.replace('�', '').replace('\x00', '')
+
+    # Remove lines that are mostly noise (symbols, tilde-runs, bracket spam…)
+    kept = []
+    for line in text.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            kept.append('')
+            continue
+        readable = sum(
+            1 for c in stripped
+            if c.isalpha() or c.isdigit() or c in ' .,;:!?()-\'"'
+        )
+        if readable / max(len(stripped), 1) >= 0.45:
+            kept.append(line)
+
+    cleaned = '\n'.join(kept)
+
+    # Collapse runs of 3+ non-alphanum chars (e.g. ~~~, ;;;;, .....) to single space
+    cleaned = re.sub(r'[^a-zA-Z0-9\s]{3,}', ' ', cleaned)
+
+    # Collapse excessive whitespace / blank lines
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = re.sub(r'[ \t]{2,}', ' ', cleaned)
+
+    return cleaned.strip()
+
+
 # ── PDF Extraction ─────────────────────────────────────────────────────
 def extract_pdf(filepath: str) -> str:
     """Extract text from PDF using PyMuPDF with pytesseract fallback."""
@@ -227,8 +268,11 @@ def extract_text(filepath: str, file_type: str) -> dict:
         raise ValueError(f"Unsupported file type: {file_type}")
 
     try:
-        text = extractor(filepath)
+        raw  = extractor(filepath)
+        text = clean_ocr_text(raw)
         lang = detect_language(text)
+        if len(text) < 50:
+            logger.warning(f"Very little readable text extracted from {filepath} ({len(text)} chars after cleaning)")
         return {
             "text":       text,
             "language":   lang,

@@ -1,0 +1,130 @@
+<svg viewBox="0 0 1000 1040" xmlns="http://www.w3.org/2000/svg" width="1000" height="1040">
+<rect x="0" y="0" width="1000" height="1040" fill="#0f1117"/>
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#2e3250"/>
+  </marker>
+  <marker id="arrowAccent" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#6c63ff"/>
+  </marker>
+</defs>
+
+<text x="500" y="26" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" fill="#e8eaf0">AI File Intelligence Bot — Architecture (CR-01)</text>
+<text x="500" y="45" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11.5" fill="#8b90a8">Offline-first, multi-user RAG platform</text>
+
+<text x="60" y="76" font-family="Segoe UI, Arial, sans-serif" font-size="10.5" font-weight="700" letter-spacing="0.5" fill="#8b90a8">REQUEST &amp; LLM PROVIDER FLOW</text>
+
+<line x1="500" y1="138" x2="500" y2="156" stroke="#2e3250" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="500" y1="204" x2="500" y2="222" stroke="#2e3250" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="500" y1="270" x2="500" y2="288" stroke="#2e3250" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<rect x="390" y="90" width="220" height="48" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="500" y="112" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#e8eaf0">User Interface</text>
+<text x="500" y="128" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" fill="#8b90a8">React frontend</text>
+
+<rect x="390" y="156" width="220" height="48" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="500" y="178" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#e8eaf0">Authentication Layer</text>
+<text x="500" y="194" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" fill="#8b90a8">JWT + bcrypt</text>
+
+<rect x="390" y="222" width="220" height="48" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="500" y="244" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#e8eaf0">Application Backend</text>
+<text x="500" y="260" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" fill="#8b90a8">FastAPI + RAG pipeline</text>
+
+<rect x="350" y="288" width="300" height="52" rx="8" fill="#1a1d2e" stroke="#6c63ff" stroke-width="1.5"/>
+<text x="500" y="311" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13.5" font-weight="700" fill="#6c63ff">LLM Service Abstraction Layer</text>
+<text x="500" y="328" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" fill="#8b90a8">Pluggable provider interface</text>
+
+<line x1="500" y1="340" x2="240" y2="384" stroke="#6c63ff" stroke-width="1.5" marker-end="url(#arrowAccent)"/>
+<line x1="500" y1="340" x2="413" y2="384" stroke="#2e3250" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="500" y1="340" x2="586" y2="384" stroke="#2e3250" stroke-width="1.5" marker-end="url(#arrow)"/>
+<line x1="500" y1="340" x2="759" y2="384" stroke="#2e3250" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+<rect x="163" y="384" width="155" height="56" rx="8" fill="#1a1d2e" stroke="#6c63ff" stroke-width="1.5"/>
+<text x="240" y="406" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="700" fill="#6c63ff">Ollama</text>
+<text x="240" y="420" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">Local · offline default</text>
+<text x="240" y="432" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">(Local LLM)</text>
+
+<rect x="336" y="384" width="155" height="56" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="413" y="406" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#e8eaf0">Mistral</text>
+<text x="413" y="420" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">Cloud fallback</text>
+<text x="413" y="432" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">(Cloud)</text>
+
+<rect x="509" y="384" width="155" height="56" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="586" y="406" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#e8eaf0">OpenAI</text>
+<text x="586" y="420" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">Cloud fallback</text>
+<text x="586" y="432" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">(Cloud)</text>
+
+<rect x="682" y="384" width="155" height="56" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="759" y="406" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="12.5" font-weight="600" fill="#e8eaf0">Gemini</text>
+<text x="759" y="420" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">Cloud fallback</text>
+<text x="759" y="432" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">(Cloud)</text>
+
+<line x1="240" y1="440" x2="240" y2="478" stroke="#8b90a8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+<text x="252" y="462" font-family="Segoe UI, Arial, sans-serif" font-size="8.5" fill="#8b90a8">if unreachable</text>
+<rect x="125" y="478" width="230" height="46" rx="8" fill="#1a1d2e" stroke="#2e3250" stroke-dasharray="4,3"/>
+<text x="240" y="498" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11.5" font-weight="600" fill="#e8eaf0">Offline Local Synthesizer</text>
+<text x="240" y="513" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">final fallback, no network</text>
+
+<line x1="60" y1="552" x2="940" y2="552" stroke="#2e3250" stroke-width="1" opacity="0.4"/>
+
+<text x="60" y="580" font-family="Segoe UI, Arial, sans-serif" font-size="10.5" font-weight="700" letter-spacing="0.5" fill="#8b90a8">STORAGE LAYER — SQLITE</text>
+
+<rect x="390" y="592" width="220" height="48" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="500" y="614" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="600" fill="#e8eaf0">SQLite Database</text>
+<text x="500" y="630" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9.5" fill="#8b90a8">app.db · single file</text>
+
+<line x1="500" y1="640" x2="240" y2="684" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="500" y1="640" x2="370" y2="684" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="500" y1="640" x2="500" y2="684" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="500" y1="640" x2="630" y2="684" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="500" y1="640" x2="760" y2="684" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+<rect x="183" y="684" width="115" height="52" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="240" y="714" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Users</text>
+
+<rect x="313" y="684" width="115" height="52" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="370" y="714" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Documents</text>
+
+<rect x="443" y="684" width="115" height="52" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="500" y="714" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Conversations</text>
+
+<rect x="573" y="684" width="115" height="52" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="630" y="714" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Chat Messages</text>
+
+<rect x="703" y="684" width="115" height="52" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="760" y="714" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Models</text>
+
+<line x1="60" y1="764" x2="940" y2="764" stroke="#2e3250" stroke-width="1" opacity="0.4"/>
+
+<text x="60" y="792" font-family="Segoe UI, Arial, sans-serif" font-size="10.5" font-weight="700" letter-spacing="0.5" fill="#8b90a8">PER-USER DATA ISOLATION — NO CROSS-ACCESS</text>
+
+<line x1="500" y1="804" x2="500" y2="960" stroke="#8b90a8" stroke-width="1.2" stroke-dasharray="5,4" opacity="0.6"/>
+
+<rect x="185" y="808" width="190" height="48" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="280" y="830" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#e8eaf0">User A</text>
+<text x="280" y="846" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">own storage only</text>
+
+<rect x="625" y="808" width="190" height="48" rx="8" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="720" y="830" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" fill="#e8eaf0">User B</text>
+<text x="720" y="846" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#8b90a8">own storage only</text>
+
+<line x1="280" y1="856" x2="195" y2="900" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="280" y1="856" x2="365" y2="900" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="720" y1="856" x2="635" y2="900" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+<line x1="720" y1="856" x2="805" y2="900" stroke="#2e3250" stroke-width="1.3" marker-end="url(#arrow)"/>
+
+<rect x="120" y="900" width="150" height="50" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="195" y="930" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Upload Folder A</text>
+
+<rect x="290" y="900" width="150" height="50" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="365" y="930" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">FAISS Index A</text>
+
+<rect x="560" y="900" width="150" height="50" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="635" y="930" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">Upload Folder B</text>
+
+<rect x="730" y="900" width="150" height="50" rx="7" fill="#1a1d2e" stroke="#2e3250"/>
+<text x="805" y="930" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="11" font-weight="600" fill="#e8eaf0">FAISS Index B</text>
+
+<rect x="415" y="995" width="11" height="11" rx="2" fill="none" stroke="#6c63ff" stroke-width="1.5"/>
+<text x="433" y="1004" font-family="Segoe UI, Arial, sans-serif" font-size="10" fill="#8b90a8">= default offline path (Ollama)</text>
+</svg>

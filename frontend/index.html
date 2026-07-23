@@ -92,6 +92,10 @@
       border-radius: 99px;
       transition: width .3s;
     }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
 
     /* ── Document list ── */
     .docs-section {
@@ -133,6 +137,37 @@
       transition: color .2s; flex-shrink: 0;
     }
     .doc-del:hover { color: var(--error); }
+
+    /* ── Document description panel ── */
+    .doc-desc {
+      margin: 0 14px 8px;
+      background: rgba(0,210,255,.04);
+      border: 1px solid rgba(0,210,255,.12);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: var(--text2);
+      line-height: 1.55;
+    }
+    .doc-desc-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      color: var(--accent2);
+      margin-bottom: 5px;
+    }
+    .doc-desc-summary { color: var(--text); margin-bottom: 6px; }
+    .doc-desc-points { list-style: none; padding: 0; margin: 0; }
+    .doc-desc-points li {
+      padding: 2px 0 2px 10px;
+      position: relative;
+    }
+    .doc-desc-points li::before {
+      content: "›";
+      position: absolute; left: 0;
+      color: var(--accent2);
+    }
 
     /* ── Stats bar ── */
     .stats-bar {
@@ -250,6 +285,54 @@
     .send-btn:hover  { opacity: .88; }
     .send-btn:disabled { opacity: .35; cursor: not-allowed; }
 
+    /* ── Summarize button ── */
+    .summarize-btn {
+      background: linear-gradient(135deg, var(--success), #00a870);
+      border: none; border-radius: 8px; color: #fff;
+      padding: 5px 12px; font-size: 11px; font-weight: 700;
+      cursor: pointer; transition: opacity .2s; white-space: nowrap;
+    }
+    .summarize-btn:hover  { opacity: .88; }
+    .summarize-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+    /* ── Summary card (main area) ── */
+    .summary-card {
+      margin: 16px 20px 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent2);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      animation: fadeIn .3s ease;
+    }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .summary-card-header {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+    }
+    .summary-card-title {
+      font-size: 12px; font-weight: 700; color: var(--accent2);
+      text-transform: uppercase; letter-spacing: .6px; flex: 1;
+    }
+    .summary-card-doc {
+      font-size: 10px; color: var(--text2); font-weight: 400; text-transform: none; letter-spacing: 0;
+    }
+    .summary-card-body { font-size: 13px; color: var(--text); line-height: 1.65; margin-bottom: 10px; }
+    .summary-card-points { list-style: none; padding: 0; margin: 0; }
+    .summary-card-points li {
+      font-size: 12px; color: var(--text2); padding: 3px 0 3px 14px; position: relative;
+    }
+    .summary-card-points li::before { content: "›"; position: absolute; left: 0; color: var(--accent2); }
+    .summary-skeleton {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--text2); padding: 4px 0;
+    }
+    .skeleton-spin {
+      width: 14px; height: 14px; border: 2px solid var(--border);
+      border-top-color: var(--accent2); border-radius: 50%;
+      animation: spin .7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     /* ── Welcome / empty state ── */
     .welcome {
       flex: 1; display: flex; align-items: center; justify-content: center;
@@ -287,6 +370,132 @@
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+    /* ── Auth: Login/Register screen ── */
+    .auth-screen {
+      height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: var(--bg);
+    }
+    .auth-card {
+      width: 360px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 32px 28px;
+    }
+    .auth-card h1 {
+      font-size: 18px; font-weight: 700; margin-bottom: 4px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .auth-card p.sub { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+    .auth-field { margin-bottom: 12px; }
+    .auth-field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+    .auth-field input {
+      width: 100%; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 11px; font-size: 13px; color: var(--text);
+      font-family: var(--font);
+    }
+    .auth-field input:focus { outline: none; border-color: var(--accent); }
+    .auth-submit {
+      width: 100%; margin-top: 6px; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+      color: #fff; border: none; border-radius: 8px; padding: 10px; font-size: 13px;
+      font-weight: 600; cursor: pointer;
+    }
+    .auth-submit:disabled { opacity: .5; cursor: not-allowed; }
+    .auth-error {
+      background: rgba(255,77,109,.12); color: var(--error); border-radius: 6px;
+      padding: 8px 10px; font-size: 12px; margin-bottom: 12px;
+    }
+    .auth-switch { margin-top: 16px; font-size: 12px; color: var(--text2); text-align: center; }
+    .auth-switch a { color: var(--accent2); cursor: pointer; text-decoration: none; }
+
+    /* ── Top nav ── */
+    .topnav {
+      height: 44px; min-height: 44px; display: flex; align-items: center;
+      gap: 4px; padding: 0 14px; background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .topnav-tab {
+      font-size: 12px; font-weight: 600; color: var(--text2); padding: 7px 12px;
+      border-radius: 7px; cursor: pointer; border: none; background: none;
+      font-family: var(--font);
+    }
+    .topnav-tab.active { color: #fff; background: var(--accent); }
+    .topnav-tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
+    .topnav-spacer { flex: 1; }
+    .topnav-user { font-size: 12px; color: var(--text2); margin-right: 10px; }
+    .topnav-user b { color: var(--text); }
+    .topnav-logout {
+      font-size: 11px; color: var(--text2); background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer;
+    }
+    .topnav-logout:hover { color: var(--error); border-color: var(--error); }
+    .app-shell { display: flex; flex-direction: column; height: 100vh; }
+    .app-shell .app { height: auto; flex: 1; min-height: 0; }
+
+    /* ── Settings / Admin pages ── */
+    .settings-page { flex: 1; overflow-y: auto; padding: 28px 36px; max-width: 780px; }
+    .settings-page h2 { font-size: 18px; margin-bottom: 4px; }
+    .settings-page p.hint { font-size: 12px; color: var(--text2); margin-bottom: 20px; }
+    .settings-section {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; margin-bottom: 18px;
+    }
+    .settings-section h3 { font-size: 13px; margin-bottom: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+    .model-row {
+      display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px;
+      cursor: pointer; font-size: 13px;
+    }
+    .model-row:hover { background: var(--surface2); }
+    .model-row .dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--text2); flex-shrink: 0; }
+    .model-row.active .dot { background: var(--success); border-color: var(--success); }
+    .model-row .mname { flex: 1; }
+    .model-row .msize { font-size: 11px; color: var(--text2); }
+    .settings-btn {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 7px; padding: 7px 14px; font-size: 12px; cursor: pointer; font-family: var(--font);
+    }
+    .settings-btn:hover { border-color: var(--accent); }
+    .settings-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .settings-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .banner-warn {
+      background: rgba(255,169,64,.12); color: var(--warning); border-radius: 8px;
+      padding: 10px 12px; font-size: 12px; margin-bottom: 14px;
+    }
+    .banner-ok {
+      background: rgba(0,196,140,.12); color: var(--success); border-radius: 8px;
+      padding: 10px 12px; font-size: 12px; margin-bottom: 14px;
+    }
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .admin-table th { text-align: left; color: var(--text2); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+    .admin-table td { padding: 8px; border-bottom: 1px solid var(--border); }
+    .role-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; background: var(--surface2); }
+    .role-badge.admin { color: var(--accent2); }
+    .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+    .status-dot.on { background: var(--success); }
+    .status-dot.off { background: var(--error); }
+    .inline-form { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .inline-form input, .inline-form select {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 9px; font-size: 12px; color: var(--text); font-family: var(--font);
+    }
+
+    /* ── History (conversations) ── */
+    .history-section { padding: 0 14px 10px; }
+    .history-title {
+      font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase;
+      letter-spacing: .6px; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center;
+    }
+    .history-new {
+      font-size: 11px; color: var(--accent2); cursor: pointer; background: none; border: none; font-family: var(--font);
+    }
+    .history-item {
+      display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 7px;
+      cursor: pointer; font-size: 12px; color: var(--text2);
+    }
+    .history-item:hover { background: var(--surface2); }
+    .history-item.active { background: var(--surface2); color: var(--text); }
+    .history-item .htitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-del { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 11px; opacity: 0; }
+    .history-item:hover .history-del { opacity: 1; }
+    .history-del:hover { color: var(--error); }
   </style>
 </head>
 <body>
@@ -379,29 +588,360 @@ function Message({ msg }) {
   );
 }
 
+// ── Auth: token storage + axios wiring ──────────────────────────────────
+// localStorage is appropriate here — this is the real deployed app running
+// in the user's own browser against their own local server, not a Claude
+// artifact sandbox. It's what lets a refresh keep you logged in.
+function getStoredAuth() {
+  try {
+    const raw = localStorage.getItem("afib_auth");
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function setStoredAuth(auth) {
+  if (auth) localStorage.setItem("afib_auth", JSON.stringify(auth));
+  else localStorage.removeItem("afib_auth");
+}
+
+// ── Login / Register screen ─────────────────────────────────────────────
+function LoginScreen({ onAuthed }) {
+  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [form, setForm] = useState({ username: "", email: "", password: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(""); setBusy(true);
+    try {
+      if (mode === "register") {
+        await axios.post(`${API}/auth/register`, {
+          username: form.username, email: form.email, password: form.password,
+        });
+      }
+      const body = new URLSearchParams();
+      body.append("username", form.username || form.email);
+      body.append("password", form.password);
+      const r = await axios.post(`${API}/auth/login`, body, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+      const auth = { token: r.data.access_token, user: r.data.user };
+      setStoredAuth(auth);
+      onAuthed(auth);
+    } catch (err) {
+      setError(err.response?.data?.detail || "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <form className="auth-card" onSubmit={submit}>
+        <h1>🧠 AI File Intelligence</h1>
+        <p className="sub">{mode === "login" ? "Sign in to your workspace" : "Create your account"}</p>
+        {error && <div className="auth-error">{error}</div>}
+
+        <div className="auth-field">
+          <label>Username</label>
+          <input required value={form.username}
+            onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+        </div>
+        {mode === "register" && (
+          <div className="auth-field">
+            <label>Email</label>
+            <input type="email" required value={form.email}
+              onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          </div>
+        )}
+        <div className="auth-field">
+          <label>Password</label>
+          <input type="password" required value={form.password}
+            onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+        </div>
+
+        <button className="auth-submit" disabled={busy} type="submit">
+          {busy ? "Please wait…" : mode === "login" ? "Sign In" : "Create Account"}
+        </button>
+
+        <div className="auth-switch">
+          {mode === "login" ? (
+            <>No account? <a onClick={() => { setMode("register"); setError(""); }}>Register</a></>
+          ) : (
+            <>Already have an account? <a onClick={() => { setMode("login"); setError(""); }}>Sign in</a></>
+          )}
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ── Top navigation ────────────────────────────────────────────────────
+function TopNav({ user, page, setPage, onLogout }) {
+  return (
+    <div className="topnav">
+      <button className={`topnav-tab ${page === "chat" ? "active" : ""}`} onClick={() => setPage("chat")}>💬 Chat</button>
+      <button className={`topnav-tab ${page === "models" ? "active" : ""}`} onClick={() => setPage("models")}>⚙️ Models</button>
+      {user.role === "admin" && (
+        <button className={`topnav-tab ${page === "admin" ? "active" : ""}`} onClick={() => setPage("admin")}>🛠️ Admin</button>
+      )}
+      <div className="topnav-spacer" />
+      <div className="topnav-user">Signed in as <b>{user.username}</b> ({user.role})</div>
+      <button className="topnav-logout" onClick={onLogout}>Log out</button>
+    </div>
+  );
+}
+
+// ── Model Settings page ─────────────────────────────────────────────────
+function ModelSettingsPanel({ user }) {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const isAdmin = user.role === "admin";
+
+  const load = async () => {
+    try { const r = await axios.get(`${API}/models`); setData(r.data); } catch {}
+  };
+  useEffect(() => { load(); }, []);
+
+  const refresh = async () => {
+    setBusy(true);
+    try { await axios.post(`${API}/models/refresh`); await load(); } catch {} finally { setBusy(false); }
+  };
+  const activate = async (model_name, provider = "ollama") => {
+    setBusy(true);
+    try { await axios.post(`${API}/models/active`, { model_name, provider }); await load(); }
+    catch {} finally { setBusy(false); }
+  };
+
+  if (!data) return <div className="settings-page"><p className="hint">Loading…</p></div>;
+
+  return (
+    <div className="settings-page">
+      <h2>Model Settings</h2>
+      <p className="hint">Ollama drives the RAG pipeline locally — no code changes needed to switch models.</p>
+
+      {!data.ollama_reachable && (
+        <div className="banner-warn">
+          ⚠️ Ollama is not reachable at the configured URL. Run <code>ollama serve</code> and make sure
+          at least one model is pulled (<code>ollama pull llama3.1:8b</code>), then hit Refresh.
+        </div>
+      )}
+      {data.ollama_reachable && data.installed_ollama_models.length === 0 && (
+        <div className="banner-warn">Ollama is running but no models are installed yet — run <code>ollama pull &lt;model&gt;</code>.</div>
+      )}
+
+      <div className="settings-section">
+        <h3>Installed Models</h3>
+        {data.installed_ollama_models.length === 0 ? (
+          <p className="hint" style={{marginBottom:0}}>No Ollama models detected.</p>
+        ) : (
+          data.installed_ollama_models.map(m => {
+            const active = data.active_model && data.active_model.provider === "ollama" && data.active_model.model_name === m.name;
+            return (
+              <div key={m.name} className={`model-row ${active ? "active" : ""}`}
+                onClick={() => isAdmin && !busy && activate(m.name, "ollama")}>
+                <div className="dot" />
+                <div className="mname">{m.name}</div>
+                {m.parameter_size && <div className="msize">{m.parameter_size}</div>}
+                {m.size && <div className="msize">{formatBytes(m.size)}</div>}
+              </div>
+            );
+          })
+        )}
+        <div style={{marginTop:14, display:"flex", gap:8}}>
+          <button className="settings-btn" disabled={busy || !isAdmin} onClick={refresh}>↻ Refresh Models</button>
+        </div>
+        {!isAdmin && <p className="hint" style={{marginTop:10, marginBottom:0}}>Only admins can refresh or change the active model.</p>}
+      </div>
+
+      {/* External providers — Mistral / OpenAI / Gemini. Only shown as selectable
+          if that provider's API key is configured in .env; otherwise a hint on how to enable it. */}
+      <div className="settings-section">
+        <h3>External Providers (optional — cloud fallback)</h3>
+        {(data.external_providers || []).map(ep => (
+          <div key={ep.provider} style={{marginBottom: 14}}>
+            <div style={{fontSize:12, fontWeight:600, textTransform:"capitalize", marginBottom:6, color: ep.available ? "var(--text)" : "var(--text2)"}}>
+              {ep.provider} {!ep.available && <span className="hint" style={{display:"inline"}}>— no API key configured</span>}
+            </div>
+            {ep.available && ep.models.length === 0 && (
+              <p className="hint" style={{marginBottom:4}}>API key set, but no models returned — check the key is valid.</p>
+            )}
+            {ep.available && ep.models.map(m => {
+              const active = data.active_model && data.active_model.provider === ep.provider && data.active_model.model_name === m.name;
+              return (
+                <div key={m.name} className={`model-row ${active ? "active" : ""}`}
+                  onClick={() => isAdmin && !busy && activate(m.name, ep.provider)}>
+                  <div className="dot" />
+                  <div className="mname">{m.display_name || m.name}</div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      <div className="settings-section">
+        <h3>Current Active Model</h3>
+        {data.active_model ? (
+          <div className="banner-ok">✓ {data.active_model.model_name} ({data.active_model.provider})</div>
+        ) : (
+          <p className="hint" style={{marginBottom:0}}>No active model configured — Ollama's first installed model will be used automatically, with Mistral/OpenAI/Gemini/local fallback if Ollama is unreachable.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Admin Panel page ────────────────────────────────────────────────────
+function AdminPanel() {
+  const [tab, setTab] = useState("users");
+  const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [form, setForm] = useState({ username: "", email: "", password: "", role: "user" });
+  const [error, setError] = useState("");
+
+  const loadUsers = async () => {
+    try { const r = await axios.get(`${API}/admin/users`); setUsers(r.data); } catch {}
+  };
+  const loadStats = async () => {
+    try { const r = await axios.get(`${API}/admin/stats`); setStats(r.data); } catch {}
+  };
+  useEffect(() => { loadUsers(); loadStats(); }, []);
+
+  const createUser = async (e) => {
+    e.preventDefault(); setError("");
+    try {
+      await axios.post(`${API}/admin/users`, form);
+      setForm({ username: "", email: "", password: "", role: "user" });
+      await loadUsers();
+    } catch (err) { setError(err.response?.data?.detail || "Failed to create user."); }
+  };
+
+  const toggleUser = async (id) => {
+    try { await axios.patch(`${API}/admin/users/${id}/disable`); await loadUsers(); } catch {}
+  };
+
+  return (
+    <div className="settings-page">
+      <h2>Admin Panel</h2>
+      <p className="hint">User &amp; model management, system overview.</p>
+
+      {stats && (
+        <div className="settings-section">
+          <h3>System Overview</h3>
+          <div style={{display:"flex", gap:28, fontSize:13}}>
+            <div><b>{stats.total_users}</b> users ({stats.active_users} active)</div>
+            <div><b>{stats.total_documents}</b> documents</div>
+            <div><b>{stats.total_conversations}</b> conversations</div>
+            <div><span className={`status-dot ${stats.ollama_reachable ? "on" : "off"}`} />Ollama {stats.ollama_reachable ? "online" : "offline"}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="settings-section">
+        <h3>Users</h3>
+        <table className="admin-table">
+          <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id}>
+                <td>{u.username}</td>
+                <td>{u.email}</td>
+                <td><span className={`role-badge ${u.role === "admin" ? "admin" : ""}`}>{u.role}</span></td>
+                <td><span className={`status-dot ${u.is_active ? "on" : "off"}`} />{u.is_active ? "Active" : "Disabled"}</td>
+                <td><button className="settings-btn" onClick={() => toggleUser(u.id)}>{u.is_active ? "Disable" : "Enable"}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {error && <div className="auth-error" style={{marginTop:12}}>{error}</div>}
+        <form className="inline-form" onSubmit={createUser}>
+          <input placeholder="username" required value={form.username}
+            onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+          <input placeholder="email" type="email" required value={form.email}
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+          <input placeholder="password" type="password" required value={form.password}
+            onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+          <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+            <option value="user">user</option>
+            <option value="admin">admin</option>
+          </select>
+          <button className="settings-btn primary" type="submit">+ Create User</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ───────────────────────────────────────────────────────────
-function App() {
+function App({ user }) {
   const [messages,    setMessages]    = useState([]);
   const [input,       setInput]       = useState("");
   const [loading,     setLoading]     = useState(false);
   const [uploading,   setUploading]   = useState(false);
   const [uploadPct,   setUploadPct]   = useState(0);
+  const [indexing,    setIndexing]    = useState(false);
   const [documents,   setDocuments]   = useState([]);
   const [stats,       setStats]       = useState({ total_chunks: 0, total_documents: 0 });
-  const [selectedDoc, setSelectedDoc] = useState(null);
-  const [toast,       setToast]       = useState(null);
-  const [sessionId]                   = useState(() => genId());
-  const [isDrag,      setIsDrag]      = useState(false);
+  const [selectedDoc,    setSelectedDoc]    = useState(null);
+  const [toast,          setToast]          = useState(null);
+  const [isDrag,         setIsDrag]         = useState(false);
+  const [docDescriptions, setDocDescriptions] = useState({});
+  const [descLoading,     setDescLoading]     = useState({});
+  const [summarizing,     setSummarizing]     = useState(false);
+  const [conversations,        setConversations]        = useState([]);
+  const [activeConversationId, setActiveConversationId]  = useState(null);
 
-  const fileRef    = useRef();
-  const bottomRef  = useRef();
-  const textaRef   = useRef();
+  const fileRef          = useRef();
+  const bottomRef        = useRef();
+  const textaRef         = useRef();
+  const fetchedDesc      = useRef(new Set()); // tracks which docs already had summary fetched
 
-  // ── Fetch docs & stats on mount ──────────────────────────────────────
+  // ── Fetch docs, stats & conversation history on mount ────────────────
   useEffect(() => {
     fetchDocs();
     fetchStats();
+    fetchConversations();
   }, []);
+
+  // ── Conversation history (per-user, persisted server-side) ───────────
+  const fetchConversations = async () => {
+    try {
+      const r = await axios.get(`${API}/conversations`);
+      setConversations(r.data.conversations || []);
+    } catch {}
+  };
+
+  const startNewConversation = () => {
+    setActiveConversationId(null);
+    setMessages([]);
+    setSelectedDoc(null);
+  };
+
+  const openConversation = async (id) => {
+    setActiveConversationId(id);
+    try {
+      const r = await axios.get(`${API}/conversations/${id}/messages`);
+      const loaded = [];
+      (r.data.messages || []).forEach(m => {
+        loaded.push({ role: "user", content: m.question, id: genId() });
+        loaded.push({ role: "assistant", content: m.response, model: m.model_used, id: genId() });
+      });
+      setMessages(loaded);
+    } catch {
+      showToast("Could not load that conversation", "error");
+    }
+  };
+
+  const removeConversation = async (e, id) => {
+    e.stopPropagation();
+    try {
+      await axios.delete(`${API}/conversations/${id}`);
+      if (activeConversationId === id) startNewConversation();
+      await fetchConversations();
+    } catch { showToast("Delete failed", "error"); }
+  };
 
   // ── Auto-scroll ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -415,8 +955,17 @@ function App() {
   const fetchDocs = async () => {
     try {
       const r = await axios.get(`${API}/documents`);
-      setDocuments(r.data.documents || []);
-    } catch { /* server may not be up yet */ }
+      const docs = r.data.documents || [];
+      setDocuments(docs);
+      // Auto-fetch descriptions for any doc we haven't seen yet
+      docs.forEach(doc => {
+        if (!fetchedDesc.current.has(doc.source)) {
+          fetchedDesc.current.add(doc.source);
+          fetchDocDescription(doc.source);
+        }
+      });
+      return docs;
+    } catch { return []; }
   };
 
   const fetchStats = async () => {
@@ -426,26 +975,77 @@ function App() {
     } catch {}
   };
 
+  const fetchDocDescription = async (filename) => {
+    setDescLoading(prev => ({ ...prev, [filename]: true }));
+    try {
+      const r = await axios.post(`${API}/summary`, { source: filename, top_k: 10 });
+      const { summary, key_points } = r.data;
+      setDocDescriptions(prev => ({
+        ...prev,
+        [filename]: { summary, key_points: key_points || [] },
+      }));
+    } catch { /* summary is best-effort */ }
+    finally {
+      setDescLoading(prev => ({ ...prev, [filename]: false }));
+    }
+  };
+
+  // ── Poll /documents until filename appears (background indexing) ────────
+  const pollUntilIndexed = async (filename) => {
+    const maxAttempts = 90; // up to 3 min
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(res => setTimeout(res, 2000));
+      try {
+        const r = await axios.get(`${API}/documents`);
+        const docs = r.data.documents || [];
+        if (docs.some(d => d.source === filename)) return true;
+      } catch { /* server busy */ }
+    }
+    return false; // timed out
+  };
+
   // ── File upload handler ───────────────────────────────────────────────
   const handleUpload = async (file) => {
     if (!file) return;
     setUploading(true);
-    setUploadPct(10);
+    setUploadPct(5);
 
     const fd = new FormData();
     fd.append("file", file);
 
     try {
-      setUploadPct(40);
+      // Phase 1: file transfer (0–80%)
       const r = await axios.post(`${API}/upload`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (e) => {
-          const pct = Math.round((e.loaded / e.total) * 50);
-          setUploadPct(50 + pct);
+          if (e.total) {
+            const pct = Math.round((e.loaded / e.total) * 75);
+            setUploadPct(5 + pct);
+          }
         },
       });
+
+      setUploadPct(80);
+      setUploading(false);
+
+      // Phase 2: background indexing (80–100%) — poll until doc appears
+      if (r.data.status === "processing") {
+        setIndexing(true);
+        const done = await pollUntilIndexed(r.data.filename);
+        setIndexing(false);
+        if (done) {
+          showToast(`✅ ${r.data.filename} indexed`, "success");
+          fetchDocDescription(r.data.filename); // async, no await needed
+        } else {
+          showToast(`⚠️ ${r.data.filename} — indexing taking longer than expected, check later`, "info");
+        }
+      } else {
+        // Legacy sync response (chunks field present)
+        showToast(`✅ ${r.data.filename} — ${r.data.chunks} chunks indexed`, "success");
+        fetchDocDescription(r.data.filename);
+      }
+
       setUploadPct(100);
-      showToast(`✅ ${r.data.filename} — ${r.data.chunks} chunks indexed`, "success");
       await fetchDocs();
       await fetchStats();
     } catch (err) {
@@ -453,6 +1053,7 @@ function App() {
       showToast(`❌ ${msg}`, "error");
     } finally {
       setUploading(false);
+      setIndexing(false);
       setTimeout(() => setUploadPct(0), 600);
       if (fileRef.current) fileRef.current.value = "";
     }
@@ -469,13 +1070,15 @@ function App() {
     setLoading(true);
 
     try {
-      const r = await axios.post(`${API}/query`, {
-        query:      q,
-        session_id: sessionId,
-        user_id:    "user_01",
-        source:     selectedDoc || undefined,
-        top_k:      5,
+      const r = await axios.post(`${API}/chat`, {
+        query:           q,
+        conversation_id: activeConversationId,
+        top_k:           5,
       });
+
+      if (!activeConversationId && r.data.conversation_id) {
+        setActiveConversationId(r.data.conversation_id);
+      }
 
       const aiMsg = {
         role:    "assistant",
@@ -486,6 +1089,7 @@ function App() {
         id:      genId(),
       };
       setMessages(m => [...m, aiMsg]);
+      fetchConversations(); // refresh sidebar (title/updated_at may have changed)
     } catch (err) {
       const msg = err.response?.data?.detail || "Query failed — is the backend running?";
       setMessages(m => [...m, { role:"assistant", content:`⚠️ ${msg}`, id: genId() }]);
@@ -496,6 +1100,47 @@ function App() {
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleQuery(); }
+  };
+
+  // ── Summarize a specific document ─────────────────────────────────────
+  const handleSummarize = async (source) => {
+    if (summarizing || loading) return;
+    setSummarizing(true);
+
+    const docLabel = source || "all documents";
+    setMessages(m => [...m, {
+      role: "user",
+      content: `Generate a full summary for: ${docLabel}`,
+      id: genId(),
+    }]);
+
+    try {
+      const r = await axios.post(`${API}/summary`, {
+        source: source || undefined,
+        top_k: 15,
+      });
+      const { summary, key_points } = r.data;
+
+      let content = `**Summary — ${docLabel}**\n\n${summary}`;
+      if (key_points?.length > 0) {
+        content += "\n\n**Key Points:**\n" + key_points.map(p => `• ${p}`).join("\n");
+      }
+
+      setMessages(m => [...m, { role: "assistant", content, id: genId() }]);
+
+      // Cache result so sidebar panel updates too
+      if (source) {
+        setDocDescriptions(prev => ({
+          ...prev,
+          [source]: { summary, key_points: key_points || [] },
+        }));
+      }
+    } catch (err) {
+      const msg = err.response?.data?.detail || "Summary generation failed.";
+      setMessages(m => [...m, { role: "assistant", content: `⚠️ ${msg}`, id: genId() }]);
+    } finally {
+      setSummarizing(false);
+    }
   };
 
   // ── Delete doc ────────────────────────────────────────────────────────
@@ -540,10 +1185,13 @@ function App() {
           onDragOver={e => { e.preventDefault(); setIsDrag(true); }}
           onDragLeave={() => setIsDrag(false)}
           onDrop={onDrop}
-          onClick={() => !uploading && fileRef.current?.click()}
+          onClick={() => !uploading && !indexing && fileRef.current?.click()}
         >
-          <div className="upload-icon">📂</div>
-          <p><strong>Drop file here</strong> or click</p>
+          <div className="upload-icon">{indexing ? "⏳" : "📂"}</div>
+          {indexing
+            ? <p><strong>Indexing…</strong> this may take a moment</p>
+            : <p><strong>Drop file here</strong> or click</p>
+          }
           <p className="supported">PDF · DOCX · TXT · PNG/JPG · MP4</p>
           <input
             ref={fileRef}
@@ -554,9 +1202,15 @@ function App() {
           />
         </div>
 
-        {uploadPct > 0 && (
+        {(uploadPct > 0 || indexing) && (
           <div className="progress-bar">
-            <div className="progress-fill" style={{ width: `${uploadPct}%` }} />
+            <div
+              className="progress-fill"
+              style={{
+                width: indexing ? "100%" : `${uploadPct}%`,
+                animation: indexing ? "pulse 1.5s ease-in-out infinite" : "none",
+              }}
+            />
           </div>
         )}
 
@@ -569,19 +1223,59 @@ function App() {
             </div>
           ) : (
             documents.map(doc => (
-              <div
-                key={doc.source}
-                className={`doc-item ${selectedDoc === doc.source ? "selected" : ""}`}
-                onClick={() => setSelectedDoc(s => s === doc.source ? null : doc.source)}
-              >
-                <div className="doc-info">
-                  <div className="doc-name">{doc.source}</div>
-                  <div className="doc-meta">
-                    {doc.chunk_count} chunks · {doc.language?.toUpperCase()} · {doc.file_type}
+              <React.Fragment key={doc.source}>
+                <div
+                  className={`doc-item ${selectedDoc === doc.source ? "selected" : ""}`}
+                  onClick={() => setSelectedDoc(s => s === doc.source ? null : doc.source)}
+                >
+                  <div className="doc-info">
+                    <div className="doc-name">{doc.source}</div>
+                    <div className="doc-meta">
+                      {doc.chunk_count} chunks · {doc.language?.toUpperCase()} · {doc.file_type}
+                    </div>
                   </div>
+                  <span className={typeBadge(doc.file_type)}>{doc.file_type}</span>
+                  <button className="doc-del" onClick={e => deleteDoc(e, doc.source)} title="Remove">✕</button>
                 </div>
-                <span className={typeBadge(doc.file_type)}>{doc.file_type}</span>
-                <button className="doc-del" onClick={e => deleteDoc(e, doc.source)} title="Remove">✕</button>
+
+                {/* Description panel — shown when doc is selected or description exists */}
+                {docDescriptions[doc.source] && selectedDoc === doc.source && (
+                  <div className="doc-desc">
+                    <div className="doc-desc-title">📄 Document Overview</div>
+                    {docDescriptions[doc.source].summary && (
+                      <div className="doc-desc-summary">
+                        {docDescriptions[doc.source].summary}
+                      </div>
+                    )}
+                    {docDescriptions[doc.source].key_points?.length > 0 && (
+                      <ul className="doc-desc-points">
+                        {docDescriptions[doc.source].key_points.slice(0, 5).map((pt, i) => (
+                          <li key={i}>{pt}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </React.Fragment>
+            ))
+          )}
+        </div>
+
+        {/* Conversation history — per-user, persisted server-side */}
+        <div className="history-section">
+          <div className="history-title">
+            Chat History
+            <button className="history-new" onClick={startNewConversation}>+ New</button>
+          </div>
+          {conversations.length === 0 ? (
+            <div style={{ fontSize: 11, color: "var(--text2)", padding: "4px 2px" }}>No conversations yet.</div>
+          ) : (
+            conversations.map(c => (
+              <div key={c.id}
+                className={`history-item ${activeConversationId === c.id ? "active" : ""}`}
+                onClick={() => openConversation(c.id)}>
+                <span className="htitle">{c.title}</span>
+                <button className="history-del" onClick={e => removeConversation(e, c.id)} title="Delete">✕</button>
               </div>
             ))
           )}
@@ -613,41 +1307,108 @@ function App() {
               📎 {selectedDoc} ✕
             </div>
           )}
+          {documents.length > 0 && (
+            <button
+              className="summarize-btn"
+              disabled={summarizing || loading}
+              onClick={() => handleSummarize(selectedDoc || null)}
+              title={selectedDoc ? `Summarize ${selectedDoc}` : "Summarize all documents"}
+            >
+              {summarizing ? "⏳ Summarizing…" : "📄 Summarize"}
+            </button>
+          )}
           <div className="model-badge">
             {stats.total_chunks > 0 ? `${stats.total_chunks} vectors` : "No index"}
           </div>
         </div>
 
-        {/* Messages */}
+        {/* Messages / Welcome / Summary card */}
         {messages.length === 0 ? (
-          <div className="welcome">
-            <div className="welcome-inner">
-              <h2>Ask anything about your files</h2>
-              <p>
-                Upload documents on the left, then ask questions here.
-                The AI retrieves relevant chunks from your files and generates
-                grounded, fact-based answers — no hallucinations.
-              </p>
-              {documents.length > 0 && (
-                <>
-                  <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
-                    Try asking:
+          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+
+            {/* ── Summary card (shown when a doc is selected) ── */}
+            {selectedDoc && (
+              <div className="summary-card">
+                <div className="summary-card-header">
+                  <span className="summary-card-title">
+                    Document Summary
+                    <span className="summary-card-doc"> — {selectedDoc}</span>
+                  </span>
+                  <button
+                    className="summarize-btn"
+                    style={{ fontSize: 10, padding: "3px 9px" }}
+                    disabled={summarizing || descLoading[selectedDoc]}
+                    onClick={() => handleSummarize(selectedDoc)}
+                  >
+                    ↻ Refresh
+                  </button>
+                </div>
+
+                {descLoading[selectedDoc] ? (
+                  <div className="summary-skeleton">
+                    <div className="skeleton-spin" />
+                    Generating summary…
                   </div>
-                  <div className="pill-row">
-                    {suggestions.map(s => (
-                      <div key={s} className="pill" onClick={() => { setInput(s); textaRef.current?.focus(); }}>
-                        {s}
-                      </div>
-                    ))}
+                ) : docDescriptions[selectedDoc] ? (
+                  <>
+                    <div className="summary-card-body">
+                      {docDescriptions[selectedDoc].summary}
+                    </div>
+                    {docDescriptions[selectedDoc].key_points?.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text2)",
+                          textTransform: "uppercase", letterSpacing: ".6px", marginBottom: 5 }}>
+                          Key Points
+                        </div>
+                        <ul className="summary-card-points">
+                          {docDescriptions[selectedDoc].key_points.map((pt, i) => (
+                            <li key={i}>{pt}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="summary-skeleton">
+                    <div className="skeleton-spin" />
+                    Loading document overview…
                   </div>
-                </>
-              )}
+                )}
+              </div>
+            )}
+
+            {/* ── Generic welcome ── */}
+            <div className="welcome">
+              <div className="welcome-inner">
+                {!selectedDoc && <h2>Ask anything about your files</h2>}
+                {!selectedDoc && (
+                  <p>
+                    Upload documents on the left, then ask questions here.
+                    The AI retrieves relevant chunks and generates grounded,
+                    fact-based answers — no hallucinations.
+                  </p>
+                )}
+                {documents.length > 0 && (
+                  <>
+                    <div style={{ fontSize: 11, color: "var(--text2)", marginBottom: 10 }}>
+                      {selectedDoc ? "Try asking:" : "Try asking:"}
+                    </div>
+                    <div className="pill-row">
+                      {suggestions.map(s => (
+                        <div key={s} className="pill" onClick={() => { setInput(s); textaRef.current?.focus(); }}>
+                          {s}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ) : (
           <div className="messages">
             {messages.map(msg => <Message key={msg.id} msg={msg} />)}
-            {loading && <TypingIndicator />}
+            {(loading || summarizing) && <TypingIndicator />}
             <div ref={bottomRef} />
           </div>
         )}
@@ -673,7 +1434,7 @@ function App() {
           <button
             className="send-btn"
             onClick={handleQuery}
-            disabled={loading || !input.trim() || documents.length === 0}
+            disabled={loading || indexing || summarizing || !input.trim() || documents.length === 0}
           >
             ➤
           </button>
@@ -688,7 +1449,63 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// ── Root: auth gating + page switching ──────────────────────────────────
+function Root() {
+  const [auth, setAuth] = useState(() => getStoredAuth());
+  const [page, setPage] = useState("chat");
+
+  // Keep axios' default Authorization header in sync with the current token.
+  // IMPORTANT: this runs directly in the render body, NOT inside a useEffect.
+  // Reason: when auth changes (e.g. right after login), <App/> mounts in the
+  // same commit and its own useEffect (fetchDocs/fetchStats/fetchConversations)
+  // fires before a parent's useEffect would — so setting the header in a
+  // useEffect here was a race: the very first authenticated requests went out
+  // with no Authorization header, got 401, and the interceptor below logged
+  // the user straight back out (the "flash back to login" bug). Setting it
+  // synchronously during render guarantees it's in place before any child
+  // effect can run.
+  if (auth?.token) {
+    axios.defaults.headers.common["Authorization"] = `Bearer ${auth.token}`;
+  } else {
+    delete axios.defaults.headers.common["Authorization"];
+  }
+
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      res => res,
+      err => {
+        if (err.response?.status === 401) {
+          setStoredAuth(null);
+          setAuth(null);
+        }
+        return Promise.reject(err);
+      }
+    );
+    return () => axios.interceptors.response.eject(id);
+  }, []);
+
+  const handleLogout = async () => {
+    try { await axios.post(`${API}/auth/logout`); } catch {}
+    setStoredAuth(null);
+    setAuth(null);
+    setPage("chat");
+  };
+
+  if (!auth) {
+    return <LoginScreen onAuthed={setAuth} />;
+  }
+
+  return (
+    <div className="app-shell">
+      <TopNav user={auth.user} page={page} setPage={setPage} onLogout={handleLogout} />
+      {page === "chat" && <App user={auth.user} />}
+      {page === "models" && <ModelSettingsPanel user={auth.user} />}
+      {page === "admin" && auth.user.role === "admin" && <AdminPanel />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
 </script>
 </body>
 </html>
