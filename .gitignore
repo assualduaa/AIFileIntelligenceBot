@@ -1,0 +1,31 @@
+# ── Secrets ──────────────────────────────────────────────────────────
+.env
+backend/.env
+*.env
+!.env.example
+
+# ── Runtime data (per-deployment, not source) ──────────────────────────
+app.db
+*.db
+*.sqlite3
+vector_store/
+uploads/
+memory/*.json
+
+# ── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.venv/
+*.egg-info/
+
+# ── OS / editor cruft ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+outputs
+suppotring files
