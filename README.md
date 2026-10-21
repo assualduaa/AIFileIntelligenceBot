@@ -2,7 +2,7 @@
 
 **A multi-user, offline-first document intelligence platform.** Upload your files, chat with them in English, Arabic or Malayalam, and choose which LLM answers — local models by default, or cloud models when you explicitly go online. Every answer is grounded in the user's own documents and cited to the page.
 
-> 🔒 **This is a project showcase.** The source code is in a private repository and is available to hiring teams on request (see [Contact](#-contact)).
+> 🔒 **This is a project showcase.** The source code is in a private repository and is available to hiring teams on request (see [Contact](#-assumay@gmail.com)).
 
 ![Architecture](docs/architecture.png)
 
@@ -89,7 +89,7 @@ With the default `offline` mode the system hard-gates generation to the local LL
 
 ## 📬 Contact
 
-Built by **Asna Sherin** — AI Engineer | Data Analyst | Automation Specialist
+Built by **Asna Sherin** — AI Automation Specialist | Agentic AI Engineer | Claude Expert
 
 <!-- Add your LinkedIn / email / portfolio links here -->
 
