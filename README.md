@@ -18,6 +18,7 @@
 | 🔐 | **User authentication** | Secure token-based sessions and hashed passwords. |
 | 🛡️ | **Role-based access control** | Separate admin and user roles. |
 | 📍 | **Source citations** | Answers point to the page, slide or sheet they came from. |
+| 🎯 | **Scope-based chat** | Chat with one document, several selected documents, or the whole document set. |
 | 💬 | **Chat history** | Persistent per-user conversations, restored on reload. |
 
 ### 🌍 Multilingual — English, Arabic & Malayalam
@@ -49,6 +50,11 @@
 ### 📍 Source citations
 - Answers are grounded only in retrieved content and cited to the **page** (PDF), **slide** (PPTX) or **sheet** (XLSX).
 - Documents are scoped per conversation, so citations never leak across unrelated chats.
+
+### 🎯 Scope-based chat
+- Choose what the bot searches: a **single document**, **multiple selected documents**, or the **whole document set** in the conversation.
+- Retrieval and citations stay inside the chosen scope, so answers never mix in unrelated files.
+- Follow-up questions such as "how many modules does it have?" stay on the document you were just discussing.
 
 ### 💬 Chat history
 - Conversations are stored per user and restored on reload.
