@@ -2,6 +2,13 @@
 
 **A multi-user, offline-first document intelligence platform.** Upload your files, chat with them in English, Arabic or Malayalam, and choose which LLM answers — local models by default, or cloud models when you explicitly go online. Every answer is grounded in the user's own documents and cited to the page.
 
+   ## 🎬 Project Demo
+   
+
+https://github.com/user-attachments/assets/b6f47026-ee75-4fcc-b0a9-862d43c5cade
+
+
+
 > 🔒 **This is a project showcase.** The source code is in a private repository and is available to hiring teams on request (see [Contact](#-contact)).
 
 ![Architecture](docs/architecture.png)
