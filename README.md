@@ -27,6 +27,7 @@ https://github.com/user-attachments/assets/b6f47026-ee75-4fcc-b0a9-862d43c5cade
 | 📍 | **Source citations** | Answers point to the page, slide or sheet they came from. |
 | 🎯 | **Scope-based chat** | Chat with one document, several selected documents, or the whole document set. |
 | 💬 | **Chat history** | Persistent per-user conversations, restored on reload. |
+| 🏢 | **On-premise & private** | Model, embeddings, vector store and data all run on your own infrastructure; nothing is used for training. |
 
 ### 🌍 Multilingual — English, Arabic & Malayalam
 - Multilingual embeddings, so a question in one language can retrieve from documents in another.
@@ -96,9 +97,40 @@ https://github.com/user-attachments/assets/b6f47026-ee75-4fcc-b0a9-862d43c5cade
 
 ---
 
-## 🔒 Offline-first by design
+## 🔒 Data Privacy & On-Premise Deployment
 
-With the default `offline` mode the system hard-gates generation to the local LLM runtime and forces the embedding libraries into offline mode: **no document ever leaves the machine, and there is no silent fallback to a cloud API.** Cloud providers become reachable only when an administrator deliberately enables online mode.
+Teams choose RAG over public AI tools when their documents are **sensitive**: contracts, HR records, legal, financial, medical or government files. This bot is built for that case. The whole pipeline runs inside your own infrastructure, so your data stays yours.
+
+### Offline by default
+- The default `offline` mode keeps every document, question and answer on the machine.
+- The LLM runs locally through **Ollama** (default `llama3.1:8b`). No cloud API is called.
+- The multilingual embedding model (`BAAI/bge-m3`) also runs locally, and the embedding libraries are forced into offline mode so even model loading cannot reach the internet.
+- **No silent cloud fallback.** If a cloud model is selected while offline, it is ignored, a warning is logged and the local model answers.
+
+### On-premise architecture
+- Every component runs on your hardware: backend API, web frontend, database, FAISS vector store and the local LLM runtime.
+- Shipped as **Docker Compose**, so it can be deployed on a company server, a private network or an air-gapped machine.
+- No third-party SaaS or hosted vector database is needed at runtime.
+
+### Your data stays under your control
+- Uploaded files, extracted text, embeddings and chat history are stored on your own disk.
+- Deleting a document removes the file, its vector chunks and its database record together.
+- **Never used for training.** Local models only run inference and nothing is sent to a model provider, so your documents cannot be used to train anyone's model.
+
+### Isolation and access control
+- Token-based sessions, hashed passwords, and separate admin and user roles.
+- Each user has their own storage and vector index. Isolation is enforced at the storage level, not just by query filters.
+- Documents are scoped **per conversation**, so answers only draw on the files in that chat.
+- Uploads are hardened against path traversal, and secrets are kept out of version control.
+
+### Why it matters
+- **Data residency:** data stays on your premises or in your country, supporting local data-protection rules and internal IT policies.
+- **Predictable cost:** no per-query API fees and no dependence on a vendor's uptime.
+- **Grounded answers:** responses come only from your documents, with page-level citations.
+
+> **Online mode is an explicit opt-in.** Only an administrator can enable it, and only then do cloud providers (Mistral, OpenAI, Gemini) receive the question and retrieved document text. Keep offline mode for confidential data.
+>
+> **Hardware note:** on CPU-only machines a typical answer takes about 25–35 seconds. A GPU server makes on-premise deployment much faster.
 
 ---
 
