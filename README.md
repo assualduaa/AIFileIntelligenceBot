@@ -76,6 +76,26 @@ https://github.com/user-attachments/assets/b6f47026-ee75-4fcc-b0a9-862d43c5cade
 
 ---
 
+## 📸 Screenshots
+
+**Grounded answers with page-level source citations and the retrieved chunks behind them**
+
+![Chat with source citations](docs/screenshots/chat-citations.png)
+
+**Arabic document Q&A scoped to one selected document, then translated to English on request**
+
+![Arabic Q&A with document scope](docs/screenshots/arabic-scope-chat.png)
+
+**Multilingual conversation: ask in Arabic, follow up with translations into English and Malayalam**
+
+![Multilingual Q&A and translation](docs/screenshots/multilingual-translation.png)
+
+**Mixed file types (PDF, image via OCR, DOCX, XLSX) indexed together, with one-click summarize of a scoped document**
+
+![Multi-file upload and summarize](docs/screenshots/multi-file-summarize.png)
+
+---
+
 ## 🔒 Offline-first by design
 
 With the default `offline` mode the system hard-gates generation to the local LLM runtime and forces the embedding libraries into offline mode: **no document ever leaves the machine, and there is no silent fallback to a cloud API.** Cloud providers become reachable only when an administrator deliberately enables online mode.
